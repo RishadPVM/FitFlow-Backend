@@ -13,13 +13,20 @@ enum UserRole {
   TRAINER
 }
 
+enum DeviceType {
+  ANDROID
+  IOS
+}
+
 model User {
   id            String    @id @default(uuid())
   name          String
-  email         String    @unique
-  phone         String?
+  email         String   @unique
+  phone         String?   @unique
   profileImage  String?
+  googleId      String?   @unique
   role          UserRole  @default(USER)
+  deviceType    DeviceType 
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

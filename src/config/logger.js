@@ -14,17 +14,19 @@ const colors = {
 const getTimestamp = () => new Date().toISOString();
 
 const logger = {
-  info: (message) => {
+  info: (message, details = '') => {
     console.log(
       `${colors.fgGreen}${colors.bright}[INFO]${colors.reset} ` +
-      `${colors.fgCyan}${getTimestamp()}${colors.reset} - ${message}`
+      `${colors.fgCyan}${getTimestamp()}${colors.reset} - ${message}`,
+      details
     );
   },
 
-  warn: (message) => {
+  warn: (message, details = '') => {
     console.warn(
       `${colors.fgYellow}${colors.bright}[WARN]${colors.reset} ` +
-      `${colors.fgCyan}${getTimestamp()}${colors.reset} - ${message}`
+      `${colors.fgCyan}${getTimestamp()}${colors.reset} - ${message}`,
+      details
     );
   },
 
@@ -36,19 +38,21 @@ const logger = {
     );
   },
 
-  debug: (message) => {
+  debug: (message, details) => {
     if (process.env.NODE_ENV !== 'production') {
       console.log(
         `${colors.fgBlue}${colors.bright}[DEBUG]${colors.reset} ` +
-        `${colors.fgCyan}${getTimestamp()}${colors.reset} - ${message}`
+        `${colors.fgCyan}${getTimestamp()}${colors.reset} - ${message}`,
+        details
       );
     }
   },
 
-  success: (message) => {
+  success: (message, details = '') => {
     console.log(
       `${colors.fgGreen}${colors.bright}[SUCCESS]${colors.reset} ` +
-      `${colors.fgCyan}${getTimestamp()}${colors.reset} - ${message}`
+      `${colors.fgCyan}${getTimestamp()}${colors.reset} - ${message}`,
+      details
     );
   },
 };
