@@ -7,15 +7,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  USER
-  GYM_OWNER
-  TRAINER
-}
+// enum UserRole {
+//   USER
+//   GYM_OWNER
+//   TRAINER
+// }
 
 enum DeviceType {
   ANDROID
   IOS
+}
+
+enum BloodGroup {
+  aPositive
+  aNegative
+  bPositive
+  bNegative
+  abPositive
+  abNegative
+  oPositive
+  oNegative 
+}
+
+enum Gender {
+   male
+   female
+   other 
+}
+enum GymStatus {
+  PENDING     
+  ACTIVE      
+  INACTIVE    
+  SUSPENDED   
+  REJECTED    
+  CLOSED      
 }
 
 model User {
@@ -25,9 +50,72 @@ model User {
   phone         String?   @unique
   profileImage  String?
   googleId      String?   @unique
-  role          UserRole  @default(USER)
+  // role          UserRole  @default(USER)
   deviceType    DeviceType 
+  bloodGroup    BloodGroup?
+  dateOfBirth   DateTime?
   isActive      Boolean   @default(true)
+  currentWeight Float?
+  targetWeight  Float?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  gender        Gender?
+  height        Float?
+  isGymMember   Boolean   @default(false)
+}
+
+model Gym {
+  id                String      @id @default(uuid())
+  gymCode           String      @unique 
+  gymName           String
+  ownerName         String
+  gymAbout          String?     @db.Text
+  establishedYear   Int?
+
+  email             String      @unique
+  phone             String      @unique
+  whatsappNumber    String?
+  alternatePhone    String?
+  website           String?
+
+  addressLine1      String
+  addressLine2      String?
+  city              String
+  district          String?
+  state             String
+  country           String      @default("India")
+  postalCode        String
+  latitude          Decimal?    @db.Decimal(10, 7)
+  longitude         Decimal?    @db.Decimal(10, 7)
+
+  workingHours      Json?       // Example: {"monday":{"open":"05:00","close":"22:00"}}
+  is24Hours         Boolean     @default(false)
+
+  logoUrl           String?
+  coverImageUrl     String?
+
+  currency          String      @default("INR")
+  timezone          String      @default("Asia/Kolkata")
+  maxMembers        Int?
+  currentMembers    Int         @default(0)
+
+  instagramUrl      String?
+  facebookUrl       String?
+  youtubeUrl        String?
+
+  status            GymStatus   @default(PENDING)
+  isActive          Boolean     @default(false)
+  isVerified        Boolean     @default(false)
+  isFeatured        Boolean     @default(false)
+
+  totalTrainers     Int         @default(0)
+  totalBranches     Int         @default(1)
+
+  gstNumber         String?
+  licenseNumber     String?
+
+  deletedAt         DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
 }

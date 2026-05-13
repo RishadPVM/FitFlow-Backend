@@ -43,7 +43,6 @@ const signWithGoogle = asyncHandler(async (req, res, next) => {
         profileImage : picture,
         deviceType : deviceType,
         googleId,
-        role : 'USER'
       },
     });
 

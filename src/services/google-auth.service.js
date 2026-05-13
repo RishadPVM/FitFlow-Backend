@@ -1,6 +1,5 @@
 const { OAuth2Client } = require('google-auth-library');
 const env = require("../config/env");
-const logger = require('../config/logger');
 
 const client = new OAuth2Client(env.googleClientId);
 
