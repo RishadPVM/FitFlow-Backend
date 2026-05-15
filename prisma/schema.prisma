@@ -114,6 +114,8 @@ model Gym {
   gstNumber         String?
   licenseNumber     String?
 
+  password          String
+
   deletedAt         DateTime?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
