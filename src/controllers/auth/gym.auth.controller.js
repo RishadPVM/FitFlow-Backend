@@ -1,15 +1,11 @@
 const prisma = require("../../config/database");
 const asyncHandler = require("../../utils/async-handler");
 const ApiResponse = require("../../utils/api-response");
-const ApiError = require("../../utils/app-error");
+const AppError = require('../../utils/app-error');
 const bcrypt = require("bcrypt");
 
 
 
-/**
- * Generate unique gym code
- * Example: GYM-AB12CD
- */
 const generateGymCode = async () => {
   let gymCode;
   let exists = true;
@@ -49,8 +45,7 @@ const createGym = asyncHandler(async (req, res) => {
     alternatePhone,
     website,
 
-    addressLine1,
-    addressLine2,
+    address,
     city,
     district,
     state,
@@ -87,12 +82,13 @@ const createGym = asyncHandler(async (req, res) => {
     ownerName,
     email,
     phone,
-    addressLine1,
+    address,
     city,
     state,
     postalCode,
     password,
   };
+    
 
   for (const [field, value] of Object.entries(requiredFields)) {
     if (
@@ -100,7 +96,8 @@ const createGym = asyncHandler(async (req, res) => {
       value === null ||
       String(value).trim() === ""
     ) {
-      throw new ApiError(400, `${field} is required`);
+
+      throw new AppError(400, null, `${field} is required`);
     }
   }
 
@@ -109,7 +106,7 @@ const createGym = asyncHandler(async (req, res) => {
   // =====================================================
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    throw new ApiError(400, "Invalid email address");
+    throw new AppError(400, null, 'Invalid email address');
   }
 
   // =====================================================
@@ -122,7 +119,7 @@ const createGym = asyncHandler(async (req, res) => {
       Number(establishedYear) < 1900 ||
       Number(establishedYear) > currentYear
     ) {
-      throw new ApiError(400, "Invalid established year");
+      throw new AppError(400, null, 'Invalid established year');
     }
   }
 
@@ -134,7 +131,7 @@ const createGym = asyncHandler(async (req, res) => {
     maxMembers !== null &&
     Number(maxMembers) < 1
   ) {
-    throw new ApiError(400, "maxMembers must be greater than 0");
+    throw new AppError(400, null, 'maxMembers must be greater than 0');
   }
 
   // =====================================================
@@ -156,11 +153,11 @@ const createGym = asyncHandler(async (req, res) => {
 
   if (existingGym) {
     if (existingGym.email === email.toLowerCase().trim()) {
-      throw new ApiError(409, "Email already registered");
+      throw new AppError(409, null, 'Email already registered');
     }
 
     if (existingGym.phone === phone.trim()) {
-      throw new ApiError(409, "Phone number already registered");
+      throw new AppError(409, null, 'Phone number already registered');
     }
   }
 
@@ -191,8 +188,7 @@ const createGym = asyncHandler(async (req, res) => {
       alternatePhone: alternatePhone?.trim() || null,
       website: website?.trim() || null,
 
-      addressLine1: addressLine1.trim(),
-      addressLine2: addressLine2?.trim() || null,
+      address: address.trim(),
       city: city.trim(),
       district: district?.trim() || null,
       state: state.trim(),
@@ -244,6 +240,70 @@ const createGym = asyncHandler(async (req, res) => {
   );
 });
 
+
+const loginGym = asyncHandler(async (req, res, next) => {
+  const { emailOrPhone, password } = req.body;
+
+  try {
+
+  // Validate input
+  if (!emailOrPhone || !password) {
+    throw new AppError(400, null, 'Email or phone number and password are required');
+  }
+
+  // Find gym by email OR phone
+  const gym = await prisma.gym.findFirst({
+    where: {
+      OR: [
+        {
+          email: emailOrPhone.toLowerCase().trim(),
+        },
+        {
+          phone: emailOrPhone.trim(),
+        },
+      ],
+      deletedAt: null, 
+    },
+  });
+
+  // Gym not found
+  if (!gym) {
+    throw new AppError(404, null, 'Gym not found');
+  }
+
+  // Verify password
+  const isPasswordValid = await bcrypt.compare(password, gym.password);
+
+  if (!isPasswordValid) {
+    throw new AppError(401, null, 'Invalid password');
+  }
+
+  // // Generate tokens
+  // const accessToken = generateAcessToken(gym);
+  // const refreshToken = generateRefreshToken(gym);
+
+  // Remove password before sending response
+  const { password: _, ...gymWithoutPassword } = gym;
+
+  // Success response
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        gym: gymWithoutPassword,
+        // accessToken,
+        // refreshToken,
+      },
+      "Gym logged in successfully"
+    )
+  );
+  } catch (error) {
+    return next(error);
+  }
+});
+
+
 module.exports = {
   createGym,
+  loginGym,
 };

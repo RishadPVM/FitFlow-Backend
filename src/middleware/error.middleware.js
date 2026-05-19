@@ -1,15 +1,44 @@
-const logger = require('../config/logger');
+const AppError = require('../utils/app-error');
 
 const errorHandler = (err, req, res, next) => {
-  logger.error(err.message, err.stack);
+  console.error('❌ Error:', err);
 
-  const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
+  // Prisma unique constraint error
+  if (err.code === 'P2002') {
+    return res.status(409).json({
+      statusCode: 409,
+      success: false,
+      message: 'Duplicate entry found',
+      data: null,
+    });
+  }
 
-  res.status(statusCode).json({
+  // Prisma record not found
+  if (err.code === 'P2025') {
+    return res.status(404).json({
+      statusCode: 404,
+      success: false,
+      message: 'Record not found',
+      data: null,
+    });
+  }
+
+  // Custom AppError
+  if (err instanceof AppError) {
+    return res.status(err.statusCode).json({
+      statusCode: err.statusCode,
+      success: false,
+      message: err.message,
+      data: err.data || null,
+    });
+  }
+
+  // Validation errors or other JS errors
+  return res.status(500).json({
+    statusCode: 500,
     success: false,
-    message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    message: err.message || 'Internal Server Error',
+    data: null,
   });
 };
 

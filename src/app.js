@@ -3,7 +3,6 @@ const cors = require("cors");
 const env = require("./config/env");
 
 const errorHandler = require("./middleware/error.middleware");
-const notFoundHandler = require("./middleware/not-found.middleware");
 const rateLimiter = require("./middleware/rate-limit.middleware");
 
 // routes
@@ -26,8 +25,7 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/gyms", gymRoutes);
 
-// 404 Handler
-app.use(notFoundHandler);
+
 
 // Global Error Handler
 app.use(errorHandler);

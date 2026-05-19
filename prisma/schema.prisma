@@ -78,8 +78,7 @@ model Gym {
   alternatePhone    String?
   website           String?
 
-  addressLine1      String
-  addressLine2      String?
+  address           String
   city              String
   district          String?
   state             String
@@ -119,5 +118,38 @@ model Gym {
   deletedAt         DateTime?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
-
+   
+  membershipPlans   MembershipPlan[]
 }
+
+
+model MembershipPlan {
+  id                String   @id @default(uuid())
+  gymId             String
+  gym               Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  name              String
+  description       String?  @db.Text
+
+  price             Decimal  @db.Decimal(10, 2)
+  discountedPrice   Decimal? @db.Decimal(10, 2)
+  currency          String   @default("INR")
+
+  durationInMonths  Int
+
+  features          String[]   
+
+  isActive          Boolean  @default(true)
+  isPopular         Boolean  @default(false)
+
+  sortOrder         Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([gymId])
+  @@index([isActive])
+  @@index([isPopular])
+  @@unique([gymId, name])
+}
+
