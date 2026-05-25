@@ -61,7 +61,11 @@ model User {
   updatedAt     DateTime  @updatedAt
   gender        Gender?
   height        Float?
-  isGymMember   Boolean   @default(false)
+  membershipPlan    MembershipPlan? @relation(fields: [membershipPlanId], references: [id])
+  membershipPlanId  String?
+  gym               Gym?          @relation(fields: [gymId], references: [id])
+  gymId             String?
+  isBlocked     Boolean   @default(false)
 }
 
 model Gym {
@@ -120,6 +124,7 @@ model Gym {
   updatedAt         DateTime    @updatedAt
    
   membershipPlans   MembershipPlan[]
+  users             User[]
 }
 
 
@@ -146,6 +151,8 @@ model MembershipPlan {
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  users             User[]
 
   @@index([gymId])
   @@index([isActive])

@@ -14,4 +14,10 @@ router.route('/:id')
   .put(controller.updateUser)
   .delete(controller.deleteUser);
 
+router.route('/join-gym-and-plan/:userId')
+  .post(controller.joinGymAndPlan);
+
+router.route('/remove-gym-and-plan/:userId')
+  .delete(controller.removeGymAndPlan);
+
 module.exports = router;

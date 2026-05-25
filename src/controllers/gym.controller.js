@@ -60,9 +60,28 @@ const deleteGym = asyncHandler(async (req, res, next) => {
   }
 });
 
+
+const getGymMembers = asyncHandler(async (req, res, next) => {
+  try {
+    const { id } = req.params;
+  if (!id) {
+    throw new AppError(400, null, 'Gym ID is required');
+  }
+  const getGymMembers = await prisma.user.findMany({ 
+    where: { gymId: id }, include : {
+     membershipPlan: true,
+    } 
+  });
+  res.status(200).json(new ApiResponse(200, getGymMembers, 'Gym members retrieved successfully'));
+  } catch (error) {
+    return next(error);
+  }
+}); 
+
 module.exports = {
   getAllGyms,
   getGym,
   updateGym,
-  deleteGym
+  deleteGym,
+  getGymMembers
 };

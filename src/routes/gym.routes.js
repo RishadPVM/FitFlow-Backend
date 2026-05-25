@@ -14,4 +14,7 @@ router.route('/:id')
   .put(controller.updateGym)
   .delete(controller.deleteGym);
 
+router.route('/:id/members')
+  .get(controller.getGymMembers);
+
 module.exports = router;
