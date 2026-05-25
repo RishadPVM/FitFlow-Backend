@@ -2,6 +2,7 @@ const asyncHandler = require('../utils/async-handler');
 const ApiResponse = require('../utils/api-response');
 const AppError = require('../utils/app-error');
 const prisma = require('../config/database');
+const logger = require('../config/logger');
 
 /**
  * Create Membership Plan
@@ -20,6 +21,8 @@ const createMembershipPlan = asyncHandler(async (req, res) => {
     isPopular = false,
     sortOrder = 0,
   } = req.body;
+
+  logger.info(`Creating membership plan for gym ${gymId} with name ${name}`);
 
   // Validation
   if (!gymId || !name || price == null || durationInMonths == null) {
@@ -290,16 +293,25 @@ const deleteMembershipPlan = asyncHandler(async (req, res) => {
 /**
  * Get All Membership Plans By Gym
  */
-const getMembershipPlansByGym = asyncHandler(async (req, res) => {
-  const { gymId } = req.params;
+const getMembershipPlansByGymId = asyncHandler(async (req, res) => {
+  const { gymcode } = req.params;
 
-  if (!gymId) {
-    throw new AppError(400, null, 'Gym ID is required');
+  if (!gymcode) {
+    throw new AppError(400, null, 'Gym Code is required');
+  }
+
+   const gym = await prisma.gym.findUnique({
+    where: { gymCode:gymcode },
+    select: { id: true },
+  });
+
+  if (!gym) {
+    throw new AppError(404, null, 'Gym not found');
   }
 
   const membershipPlans =
     await prisma.membershipPlan.findMany({
-      where: { gymId },
+      where: { gymId:gym.id,},
       orderBy: [
         { sortOrder: 'asc' },
         { createdAt: 'desc' },
@@ -320,7 +332,7 @@ const getMembershipPlansByGym = asyncHandler(async (req, res) => {
 /**
  * Get Single Membership Plan
  */
-const getMembershipPlan = asyncHandler(async (req, res) => {
+const getMembershipPlanById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   if (!id) {
@@ -349,6 +361,6 @@ module.exports = {
   createMembershipPlan,
   updateMembershipPlan,
   deleteMembershipPlan,
-  getMembershipPlansByGym,
-  getMembershipPlan,
+  getMembershipPlansByGymId,
+  getMembershipPlanById,
 };
