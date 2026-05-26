@@ -61,51 +61,151 @@ const deleteUser = asyncHandler(async (req, res, next) => {
 
 
 
-
 const joinGymAndPlan = asyncHandler(async (req, res, next) => {
   try {
     const { userId } = req.params;
     const { membershipPlanId, gymId } = req.body;
+
+    // VALIDATION
     if (!userId) {
-      throw new AppError(400, null, 'User ID is required');
+      throw new AppError(400, null, "User ID is required");
     }
+
     if (!membershipPlanId || !gymId) {
-      throw new AppError(400, null, 'Membership Plan ID and Gym ID are required');
+      throw new AppError(
+        400,
+        null,
+        "Membership Plan ID and Gym ID are required"
+      );
     }
-    
-    const isUserExist = await prisma.user.findUnique({ where: { id:userId } });
+
+    // CHECK USER
+    const isUserExist = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        currentMembershipPlan: true,
+      },
+    });
+
     if (!isUserExist) {
-      throw new AppError(404, null, 'User not found');
+      throw new AppError(404, null, "User not found");
     }
 
-      const isGymExist = await prisma.gym.findUnique({
-         where: { id:gymId },
-         include:{
-          membershipPlans:{
-            where:{
-              id:membershipPlanId
-            }
-          }
-         }
-        });
+    // CHECK GYM + MEMBERSHIP PLAN
+    const isGymExist = await prisma.gym.findFirst({
+      where: {
+        id: gymId,
+        membershipPlans: {
+          some: {
+            id: membershipPlanId,
+          },
+        },
+      },
+      include: {
+        membershipPlans: {
+          where: {
+            id: membershipPlanId,
+          },
+        },
+      },
+    });
+
     if (!isGymExist) {
-      throw new AppError(404, null, 'Gym not found or membership plan not exist in that gym');
+      throw new AppError(
+        404,
+        null,
+        "Gym not found or membership plan not exist in that gym"
+      );
     }
-    
-    const joinGym = await prisma.user.update({ 
-  where: { id: userId },
 
-  data: { 
-    membershipPlanId, 
-    gymId 
-  },
+    // MEMBERSHIP PLAN
+    const selectedPlan = isGymExist.membershipPlans[0];
 
-  include: {
-    membershipPlan: true,
-    gym: true
-  }
-});
-    res.status(200).json(new ApiResponse(200, joinGym, 'Gym joined successfully'));
+    if (!selectedPlan) {
+      throw new AppError(404, null, "Membership plan not found");
+    }
+
+    // OPTIONAL:
+    // CHECK ACTIVE MEMBERSHIP
+    if (isUserExist.currentMembershipPlanId) {
+      throw new AppError(
+        400,
+        null,
+        "User already has an active membership"
+      );
+    }
+
+    // DATE CALCULATION
+    const startDate = new Date();
+
+    const endDate = new Date();
+    endDate.setMonth(
+      endDate.getMonth() + selectedPlan.durationInMonths
+    );
+
+    // TRANSACTION
+    const result = await prisma.$transaction(async (tx) => {
+      // CREATE USER MEMBERSHIP HISTORY
+      const createdMembership =
+        await tx.userMembershipPlans.create({
+          data: {
+            userId: userId,
+            membershipPlanId: selectedPlan.id,
+
+            planName: selectedPlan.name,
+            price: selectedPlan.discountedPrice
+              ? selectedPlan.discountedPrice
+              : selectedPlan.price,
+
+            currency: selectedPlan.currency,
+            durationInMonths:
+              selectedPlan.durationInMonths,
+
+            startDate,
+            endDate,
+
+            isActive: true,
+          },
+        });
+
+      // UPDATE USER
+      const updatedUser = await tx.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          gymId: gymId,
+          currentMembershipPlanId:
+            createdMembership.id,
+        },
+        include: {
+          gym: true,
+          currentMembershipPlan: true,
+        },
+      });
+
+      // UPDATE GYM MEMBER COUNT
+      await tx.gym.update({
+        where: {
+          id: gymId,
+        },
+        data: {
+          currentMembers: {
+            increment: 1,
+          },
+        },
+      });
+
+      return updatedUser;
+    });
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        result,
+        "Gym joined successfully"
+      )
+    );
   } catch (error) {
     console.log(error);
     return next(error);
@@ -116,11 +216,73 @@ const joinGymAndPlan = asyncHandler(async (req, res, next) => {
 const removeGymAndPlan = asyncHandler(async (req, res, next) => {
   try {
     const { userId } = req.params;
+
     if (!userId) {
-      throw new AppError(400, null, 'User ID is required');
+      throw new AppError(400, null, "User ID is required");
     }
-    const removeGym = await prisma.user.update({ where: { id:userId }, data: { membershipPlanId:null, gymId:null } });
-    res.status(200).json(new ApiResponse(200, removeGym, 'Gym removed successfully'));
+
+    const isUserExist = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!isUserExist) {
+      throw new AppError(404, null, "User not found");
+    }
+
+    if (!isUserExist.gymId) {
+      throw new AppError(400, null, "User not joined any gym");
+    }
+
+    const gymId = isUserExist.gymId;
+    const currentMembershipPlanId =
+      isUserExist.currentMembershipPlanId;
+
+    const result = await prisma.$transaction(
+      async (tx) => {
+
+        // DELETE MEMBERSHIP
+        if (currentMembershipPlanId) {
+          await tx.userMembershipPlans.delete({
+            where: {
+              id: currentMembershipPlanId,
+            },
+          });
+        }
+
+        // REMOVE USER FROM GYM
+        const updatedUser = await tx.user.update({
+          where: {
+            id: userId,
+          },
+          data: {
+            currentMembershipPlanId: null,
+            gymId: null,
+          },
+        });
+
+        // DECREASE MEMBER COUNT
+        await tx.gym.update({
+          where: {
+            id: gymId,
+          },
+          data: {
+            currentMembers: {
+              decrement: 1,
+            },
+          },
+        });
+
+        return updatedUser;
+      }
+    );
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        result,
+        "Gym removed successfully"
+      )
+    );
   } catch (error) {
     console.log(error);
     return next(error);

@@ -26,137 +26,170 @@ enum BloodGroup {
   abPositive
   abNegative
   oPositive
-  oNegative 
+  oNegative
 }
 
 enum Gender {
-   male
-   female
-   other 
+  male
+  female
+  other
 }
+
 enum GymStatus {
-  PENDING     
-  ACTIVE      
-  INACTIVE    
-  SUSPENDED   
-  REJECTED    
-  CLOSED      
+  PENDING
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  REJECTED
+  CLOSED
 }
 
 model User {
-  id            String    @id @default(uuid())
-  name          String
-  email         String   @unique
-  phone         String?   @unique
-  profileImage  String?
-  googleId      String?   @unique
-  // role          UserRole  @default(USER)
-  deviceType    DeviceType 
+  id           String  @id @default(uuid())
+  name         String
+  email        String  @unique
+  phone        String? @unique
+  profileImage String?
+  googleId     String? @unique
+
+  deviceType    DeviceType
   bloodGroup    BloodGroup?
   dateOfBirth   DateTime?
-  isActive      Boolean   @default(true)
+  isActive      Boolean     @default(true)
   currentWeight Float?
   targetWeight  Float?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   gender        Gender?
   height        Float?
-  membershipPlan    MembershipPlan? @relation(fields: [membershipPlanId], references: [id])
-  membershipPlanId  String?
-  gym               Gym?          @relation(fields: [gymId], references: [id])
-  gymId             String?
-  isBlocked     Boolean   @default(false)
+
+  currentMembershipPlan   UserMembershipPlans? @relation("CurrentMembership", fields: [currentMembershipPlanId], references: [id])
+  currentMembershipPlanId String?
+
+  gym   Gym?    @relation(fields: [gymId], references: [id])
+  gymId String?
+
+  isBlocked Boolean @default(false)
+
+  userMembershipPlans UserMembershipPlans[] @relation("UserMembershipHistory")
+
 }
 
 model Gym {
-  id                String      @id @default(uuid())
-  gymCode           String      @unique 
-  gymName           String
-  ownerName         String
-  gymAbout          String?     @db.Text
-  establishedYear   Int?
+  id              String  @id @default(uuid())
+  gymCode         String  @unique
+  gymName         String
+  ownerName       String
+  gymAbout        String? @db.Text
+  establishedYear Int?
 
-  email             String      @unique
-  phone             String      @unique
-  whatsappNumber    String?
-  alternatePhone    String?
-  website           String?
+  email          String  @unique
+  phone          String  @unique
+  whatsappNumber String?
+  alternatePhone String?
+  website        String?
 
-  address           String
-  city              String
-  district          String?
-  state             String
-  country           String      @default("India")
-  postalCode        String
-  latitude          Decimal?    @db.Decimal(10, 7)
-  longitude         Decimal?    @db.Decimal(10, 7)
+  address    String
+  city       String
+  district   String?
+  state      String
+  country    String   @default("India")
+  postalCode String
+  latitude   Decimal? @db.Decimal(10, 7)
+  longitude  Decimal? @db.Decimal(10, 7)
 
-  workingHours      Json?       // Example: {"monday":{"open":"05:00","close":"22:00"}}
-  is24Hours         Boolean     @default(false)
+  workingHours Json? // Example: {"monday":{"open":"05:00","close":"22:00"}}
+  is24Hours    Boolean @default(false)
 
-  logoUrl           String?
-  coverImageUrl     String?
+  logoUrl       String?
+  coverImageUrl String?
 
-  currency          String      @default("INR")
-  timezone          String      @default("Asia/Kolkata")
-  maxMembers        Int?
-  currentMembers    Int         @default(0)
+  currency       String @default("INR")
+  timezone       String @default("Asia/Kolkata")
+  maxMembers     Int?
+  currentMembers Int    @default(0)
 
-  instagramUrl      String?
-  facebookUrl       String?
-  youtubeUrl        String?
+  instagramUrl String?
+  facebookUrl  String?
+  youtubeUrl   String?
 
-  status            GymStatus   @default(PENDING)
-  isActive          Boolean     @default(false)
-  isVerified        Boolean     @default(false)
-  isFeatured        Boolean     @default(false)
+  status     GymStatus @default(PENDING)
+  isActive   Boolean   @default(false)
+  isVerified Boolean   @default(false)
+  isFeatured Boolean   @default(false)
 
-  totalTrainers     Int         @default(0)
-  totalBranches     Int         @default(1)
+  totalTrainers Int @default(0)
+  totalBranches Int @default(1)
 
-  gstNumber         String?
-  licenseNumber     String?
+  gstNumber     String?
+  licenseNumber String?
 
-  password          String
+  password String
 
-  deletedAt         DateTime?
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-   
-  membershipPlans   MembershipPlan[]
-  users             User[]
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  membershipPlans MembershipPlan[]
+  users           User[]
 }
 
+model UserMembershipPlans {
+  id String @id @default(uuid())
+
+  userId String
+
+  user User @relation("UserMembershipHistory", fields: [userId], references: [id], onDelete: Cascade)
+
+  membershipPlan MembershipPlan @relation(fields: [membershipPlanId], references: [id], onDelete: Cascade)
+
+  membershipPlanId String
+
+  planName         String
+  price            Decimal? @db.Decimal(10, 2)
+  currency         String   @default("INR")
+  durationInMonths Int
+
+  startDate DateTime
+  endDate   DateTime
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  currentUsers User[] @relation("CurrentMembership")
+}
 
 model MembershipPlan {
-  id                String   @id @default(uuid())
-  gymId             String
-  gym               Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  id    String @id @default(uuid())
+  gymId String
+  gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
 
-  name              String
-  description       String?  @db.Text
+  name        String
+  description String? @db.Text
 
-  price             Decimal  @db.Decimal(10, 2)
-  discountedPrice   Decimal? @db.Decimal(10, 2)
-  currency          String   @default("INR")
+  price           Decimal  @db.Decimal(10, 2)
+  discountedPrice Decimal? @db.Decimal(10, 2)
+  currency        String   @default("INR")
 
-  durationInMonths  Int
+  durationInMonths Int
 
-  features          String[]   
+  features String[]
 
-  isActive          Boolean  @default(true)
-  isPopular         Boolean  @default(false)
+  isActive  Boolean @default(true)
+  isPopular Boolean @default(false)
 
-  sortOrder         Int      @default(0)
+  sortOrder Int @default(0)
 
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  users             User[]
+  // users               User[]
+  userMembershipPlans UserMembershipPlans[]
 
+  @@unique([gymId, name])
   @@index([gymId])
   @@index([isActive])
   @@index([isPopular])
-  @@unique([gymId, name])
 }
-

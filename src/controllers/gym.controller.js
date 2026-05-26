@@ -69,7 +69,7 @@ const getGymMembers = asyncHandler(async (req, res, next) => {
   }
   const getGymMembers = await prisma.user.findMany({ 
     where: { gymId: id }, include : {
-     membershipPlan: true,
+     userMembershipPlans: true,
     } 
   });
   res.status(200).json(new ApiResponse(200, getGymMembers, 'Gym members retrieved successfully'));
