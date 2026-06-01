@@ -30,6 +30,10 @@ const signWithGoogle = asyncHandler(async (req, res, next) => {
 
   const existingUser = await prisma.user.findUnique({
     where: { email },
+    include : {
+      gym : true,
+      currentMembershipPlan: true,
+    }
   });
 
   if (!existingUser) {
@@ -41,6 +45,10 @@ const signWithGoogle = asyncHandler(async (req, res, next) => {
         deviceType: deviceType,
         googleId,
       },
+      include : {
+      gym : true,
+      currentMembershipPlan: true,
+    }
     });
 
     const accessToken = generateAcessToken(newUser);
