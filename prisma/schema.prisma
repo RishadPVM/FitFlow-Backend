@@ -7,11 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// enum UserRole {
-//   USER
-//   GYM_OWNER
-//   TRAINER
-// }
 
 enum DeviceType {
   ANDROID
@@ -73,6 +68,8 @@ model User {
 
   userMembershipPlans UserMembershipPlans[] @relation("UserMembershipHistory")
 
+
+  attendances Attendance[]
 }
 
 model Gym {
@@ -132,6 +129,9 @@ model Gym {
 
   membershipPlans MembershipPlan[]
   users           User[]
+  attendanceSessions AttendanceSession[]
+
+  attendances Attendance[]
 }
 
 model UserMembershipPlans {
@@ -192,4 +192,63 @@ model MembershipPlan {
   @@index([gymId])
   @@index([isActive])
   @@index([isPopular])
+}
+
+
+model AttendanceSession {
+  id String @id @default(uuid())
+
+  gymId String
+  gym Gym @relation(fields: [gymId], references: [id])
+
+  sessionCode String @unique
+
+  isActive Boolean @default(true)
+
+  startedAt DateTime @default(now())
+
+  endedAt DateTime?
+
+  createdBy String
+  qrToken String?
+  lastQrRefreshAt DateTime?
+
+  attendanceRecords Attendance[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gymId,isActive])
+}
+
+
+model Attendance {
+  id String @id @default(uuid())
+
+  userId String
+  user User @relation(fields:[userId], references:[id])
+
+  gymId String
+  gym Gym @relation(fields:[gymId], references:[id])
+
+  attendanceSessionId String
+  attendanceSession AttendanceSession @relation(fields:[attendanceSessionId], references:[id])
+
+  checkInTime DateTime @default(now())
+
+  attendanceDate DateTime
+
+  method AttendanceMethod
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId,attendanceDate])
+
+  @@index([gymId])
+  @@index([attendanceDate])
+}
+
+enum AttendanceMethod {
+  QR
+  MANUAL
 }

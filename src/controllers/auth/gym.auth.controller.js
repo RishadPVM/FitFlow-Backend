@@ -3,6 +3,7 @@ const asyncHandler = require("../../utils/async-handler");
 const ApiResponse = require("../../utils/api-response");
 const AppError = require('../../utils/app-error');
 const bcrypt = require("bcrypt");
+const { generateAcessToken, generateRefreshToken } = require("../../services/jwt.service");
 
 
 
@@ -278,9 +279,9 @@ const loginGym = asyncHandler(async (req, res, next) => {
     throw new AppError(401, null, 'Invalid password');
   }
 
-  // // Generate tokens
-  // const accessToken = generateAcessToken(gym);
-  // const refreshToken = generateRefreshToken(gym);
+  // Generate tokens
+  const accessToken = generateAcessToken({ id: gym.id, role: 'GYM_OWNER' });
+  const refreshToken = generateRefreshToken({ id: gym.id, role: 'GYM_OWNER' });
 
   // Remove password before sending response
   const { password: _, ...gymWithoutPassword } = gym;
@@ -291,8 +292,8 @@ const loginGym = asyncHandler(async (req, res, next) => {
       200,
       {
         gym: gymWithoutPassword,
-        // accessToken,
-        // refreshToken,
+        accessToken,
+        refreshToken,
       },
       "Gym logged in successfully"
     )
