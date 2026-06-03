@@ -260,11 +260,106 @@ const getPresentToday = asyncHandler(async (req, res, next) => {
   );
 });
 
+/**
+ * User check-in via QR code scan
+ * POST /attendance/check-in
+ */
+const checkIn = asyncHandler(async (req, res, next) => {
+  const userId = req.user.userId;
+  const { qrToken } = req.body;
+
+  if (!qrToken) {
+    throw new AppError("QR token is required", 400);
+  }
+
+  let qrData;
+  try {
+    qrData = JSON.parse(qrToken);
+  } catch (err) {
+    throw new AppError("Invalid QR Code format", 400);
+  }
+
+  const { sessionId, gymId, token, timestamp } = qrData;
+  if (!sessionId || !gymId || !token || !timestamp) {
+    throw new AppError("Invalid QR Code payload", 400);
+  }
+
+  // Find active session
+  const session = await prisma.attendanceSession.findFirst({
+    where: {
+      id: sessionId,
+      gymId,
+      isActive: true
+    }
+  });
+
+  if (!session) {
+    throw new AppError("Active attendance session not found", 400);
+  }
+
+  // Verify that the scanned token is fresh (within 45 seconds of generation time)
+  const tokenTime = new Date(timestamp);
+  const now = new Date();
+  const diffInSeconds = Math.abs((now - tokenTime) / 1000);
+  if (diffInSeconds > 45) {
+    throw new AppError("QR code has expired. Please scan a fresh QR code.", 400);
+  }
+
+  // Get user detail
+  const user = await prisma.user.findUnique({
+    where: { id: userId }
+  });
+
+  if (!user) {
+    throw new AppError("User not found", 404);
+  }
+
+  // Ensure user is matching the gym ID
+  if (user.gymId !== gymId) {
+    throw new AppError("You do not belong to this gym", 403);
+  }
+
+  // Normalize attendanceDate to start of today (midnight UTC)
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  // Check if attendance already marked today
+  const existingAttendance = await prisma.attendance.findUnique({
+    where: {
+      userId_attendanceDate: {
+        userId,
+        attendanceDate: today
+      }
+    }
+  });
+
+  if (existingAttendance) {
+    throw new AppError("You have already checked in for today", 400);
+  }
+
+  // Create check-in entry
+  const attendance = await prisma.attendance.create({
+    data: {
+      userId,
+      gymId,
+      attendanceSessionId: session.id,
+      attendanceDate: today,
+      method: "QR",
+      checkInTime: new Date()
+    }
+  });
+
+  return res.status(201).json(
+    new ApiResponse(201, attendance, "Attendance marked successfully")
+  );
+});
+
 module.exports = {
   startSession,
   getActiveSession,
   refreshQr,
   stopSession,
   manualEntry,
-  getPresentToday
+  getPresentToday,
+  checkIn
 };

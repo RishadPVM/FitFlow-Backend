@@ -10,5 +10,6 @@ router.post('/refresh-qr', authenticate, controller.refreshQr);
 router.post('/stop-session', authenticate, controller.stopSession);
 router.post('/manual-entry', authenticate, controller.manualEntry);
 router.get('/present-today', authenticate, controller.getPresentToday);
+router.post('/check-in', authenticate, controller.checkIn);
 
 module.exports = router;
