@@ -16,7 +16,7 @@ const startSession = asyncHandler(async (req, res, next) => {
     where: { id: gymId }
   });
   if (!gym) {
-    throw new AppError("Gym not found", 404);
+    throw new AppError(404, null, "Gym not found");
   }
 
   // Check if active session already exists
@@ -102,7 +102,7 @@ const refreshQr = asyncHandler(async (req, res, next) => {
   });
 
   if (!activeSession) {
-    throw new AppError("No active attendance session found", 404);
+    throw new AppError(404, null, "No active attendance session found");
   }
 
   // Generate qrToken structured payload
@@ -146,7 +146,7 @@ const stopSession = asyncHandler(async (req, res, next) => {
   });
 
   if (!activeSession) {
-    throw new AppError("No active session found", 404);
+    throw new AppError(404, null, "No active session found");
   }
 
   await prisma.attendanceSession.update({
@@ -168,10 +168,10 @@ const stopSession = asyncHandler(async (req, res, next) => {
  */
 const manualEntry = asyncHandler(async (req, res, next) => {
   const gymId = req.user.userId;
-  const { userId } = req.body;
+  const { userId , reason } = req.body;
 
   if (!userId) {
-    throw new AppError("userId is required", 400);
+    throw new AppError(400, null, "userId is required");
   }
 
   const activeSession = await prisma.attendanceSession.findFirst({
@@ -182,7 +182,7 @@ const manualEntry = asyncHandler(async (req, res, next) => {
   });
 
   if (!activeSession) {
-    throw new AppError("No active attendance session found", 400);
+    throw new AppError(400, null, "No active attendance session found");
   }
 
   // Verify user exists and belongs to same gym
@@ -191,11 +191,11 @@ const manualEntry = asyncHandler(async (req, res, next) => {
   });
 
   if (!user) {
-    throw new AppError("User not found", 404);
+    throw new AppError(404, null, "User not found");
   }
 
   if (user.gymId !== gymId) {
-    throw new AppError("User does not belong to this gym", 400);
+    throw new AppError(400, null, "User does not belong to this gym");
   }
 
   // Normalize check-in date to start of today (midnight UTC)
@@ -212,7 +212,7 @@ const manualEntry = asyncHandler(async (req, res, next) => {
   });
 
   if (existingAttendance) {
-    throw new AppError("Attendance already marked for today", 400);
+    throw new AppError(400, null, "Attendance already marked for today");
   }
 
   const attendance = await prisma.attendance.create({
@@ -222,6 +222,7 @@ const manualEntry = asyncHandler(async (req, res, next) => {
       attendanceSessionId: activeSession.id,
       attendanceDate: today,
       method: "MANUAL",
+      manualEntryReason : reason,
       checkInTime: new Date()
     }
   });
@@ -269,19 +270,19 @@ const checkIn = asyncHandler(async (req, res, next) => {
   const { qrToken } = req.body;
 
   if (!qrToken) {
-    throw new AppError("QR token is required", 400);
+    throw new AppError(400, null, "QR token is required");
   }
 
   let qrData;
   try {
     qrData = JSON.parse(qrToken);
   } catch (err) {
-    throw new AppError("Invalid QR Code format", 400);
+    throw new AppError(400, null, "Invalid QR Code format");
   }
 
   const { sessionId, gymId, token, timestamp } = qrData;
   if (!sessionId || !gymId || !token || !timestamp) {
-    throw new AppError("Invalid QR Code payload", 400);
+    throw new AppError(400, null, "Invalid QR Code payload");
   }
 
   // Find active session
@@ -294,7 +295,7 @@ const checkIn = asyncHandler(async (req, res, next) => {
   });
 
   if (!session) {
-    throw new AppError("Active attendance session not found", 400);
+    throw new AppError(400, null, "Active attendance session not found");
   }
 
   // Verify that the scanned token is fresh (within 45 seconds of generation time)
@@ -302,7 +303,7 @@ const checkIn = asyncHandler(async (req, res, next) => {
   const now = new Date();
   const diffInSeconds = Math.abs((now - tokenTime) / 1000);
   if (diffInSeconds > 45) {
-    throw new AppError("QR code has expired. Please scan a fresh QR code.", 400);
+    throw new AppError(400, null, "QR code has expired. Please scan a fresh QR code.");
   }
 
   // Get user detail
@@ -311,12 +312,12 @@ const checkIn = asyncHandler(async (req, res, next) => {
   });
 
   if (!user) {
-    throw new AppError("User not found", 404);
+    throw new AppError(404, null, "User not found");
   }
 
   // Ensure user is matching the gym ID
   if (user.gymId !== gymId) {
-    throw new AppError("You do not belong to this gym", 403);
+    throw new AppError(403, null, "You do not belong to this gym");
   }
 
   // Normalize attendanceDate to start of today (midnight UTC)
@@ -334,7 +335,7 @@ const checkIn = asyncHandler(async (req, res, next) => {
   });
 
   if (existingAttendance) {
-    throw new AppError("You have already checked in for today", 400);
+    throw new AppError(400, null, "You have already checked in for today");
   }
 
   // Create check-in entry

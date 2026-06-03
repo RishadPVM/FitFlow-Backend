@@ -3,18 +3,24 @@ const jwtService = require('../services/jwt.service');
 
 const authenticate = (req, res, next) => {
   try {
+    console.log("Authorization:", req.headers.authorization);
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new AppError('No token provided. Authorization denied.', 401);
+      throw new AppError(401, null, 'No token provided. Authorization denied.');
     }
 
     const token = authHeader.split(' ')[1];
     const decoded = jwtService.verifyToken(token);
+    console.log("Decoded Token:", decoded);
     
     req.user = decoded;
     next();
   } catch (error) {
-    next(new AppError('Invalid token. Authorization denied.', 401));
+    console.error("Auth error details:", error);
+    if (error instanceof AppError) {
+      return next(error);
+    }
+    next(new AppError(401, null, 'Invalid token. Authorization denied.'));
   }
 };
 

@@ -18,38 +18,50 @@ const getGymOverview = asyncHandler(async (req, res, next) => {
     // Verify gym exists
     const gym = await prisma.gym.findUnique({
       where: { id: gymId },
-      select: { id: true }
+      select: { id: true },
     });
 
     if (!gym) {
       throw new AppError(404, null, "Gym not found");
     }
+    const today = new Date();
 
     // 1. Total Users registered in the gym
     const totalUsers = await prisma.user.count({
-      where: { gymId }
+      where: { gymId },
     });
 
     // 2. Active Users in the gym
     const activeUsers = await prisma.user.count({
-      where: { gymId, isActive: true }
+      where: { gymId, isActive: true },
     });
 
     // 3. Simulated Currently live/working out in gym (grounded by active users)
-    const workingUsers = activeUsers > 0 
-      ? Math.min(activeUsers, Math.floor(activeUsers * 0.08) + 3)
-      : 0;
+    today.setUTCHours(0, 0, 0, 0);
+
+    const attendances = await prisma.attendance.findMany({
+      where: {
+        gymId,
+        attendanceDate: today,
+      },
+      select: {
+        userId: true,
+      },
+    });
+
+    const workingUsers = attendances.length;
 
     // 4. Pending amount & count calculation
     // Retrieve gym's membership plans to establish a fallback default plan price
     const gymPlans = await prisma.membershipPlan.findMany({
       where: { gymId, isActive: true },
-      select: { price: true }
+      select: { price: true },
     });
 
-    const defaultPlanPrice = gymPlans.length > 0
-      ? Math.min(...gymPlans.map(p => Number(p.price)))
-      : 1000; // fallback standard price
+    const defaultPlanPrice =
+      gymPlans.length > 0
+        ? Math.min(...gymPlans.map((p) => Number(p.price)))
+        : 1000; // fallback standard price
 
     // Retrieve users with no active/valid membership
     const pendingUsers = await prisma.user.findMany({
@@ -59,17 +71,14 @@ const getGymOverview = asyncHandler(async (req, res, next) => {
           { currentMembershipPlanId: null },
           {
             currentMembershipPlan: {
-              OR: [
-                { endDate: { lt: new Date() } },
-                { isActive: false }
-              ]
-            }
-          }
-        ]
+              OR: [{ endDate: { lt: new Date() } }, { isActive: false }],
+            },
+          },
+        ],
       },
       include: {
-        currentMembershipPlan: true
-      }
+        currentMembershipPlan: true,
+      },
     });
 
     let pendingAmount = 0;
@@ -86,7 +95,6 @@ const getGymOverview = asyncHandler(async (req, res, next) => {
     // 5. User Growth: registered users per day in the last 7 days
     const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const userGrowth = [];
-    const today = new Date();
 
     for (let i = 6; i >= 0; i--) {
       const date = new Date();
@@ -101,9 +109,9 @@ const getGymOverview = asyncHandler(async (req, res, next) => {
           gymId,
           createdAt: {
             gte: startOfDay,
-            lte: endOfDay
-          }
-        }
+            lte: endOfDay,
+          },
+        },
       });
 
       userGrowth.push({ label: dayLabel, value: Number(count) });
@@ -113,7 +121,7 @@ const getGymOverview = asyncHandler(async (req, res, next) => {
     const recentUsers = await prisma.user.findMany({
       where: { gymId, isActive: true },
       orderBy: { updatedAt: "desc" },
-      take: 5
+      take: 5,
     });
 
     const actionPool = [
@@ -121,14 +129,14 @@ const getGymOverview = asyncHandler(async (req, res, next) => {
       { action: "Checked in via QR", isEntry: true },
       { action: "Logged into app", isEntry: true },
       { action: "Completed daily goal", isEntry: false },
-      { action: "Left the gym", isEntry: false }
+      { action: "Left the gym", isEntry: false },
     ];
 
     const liveActivity = recentUsers.map((user, index) => {
       const actionObj = actionPool[index % actionPool.length];
       const diffMs = new Date() - new Date(user.updatedAt);
       const diffMins = Math.max(0, Math.floor(diffMs / 60000));
-      
+
       let timeStr = "Just now";
       if (diffMins > 0 && diffMins < 60) {
         timeStr = `${diffMins} min ago`;
@@ -144,7 +152,7 @@ const getGymOverview = asyncHandler(async (req, res, next) => {
         userName: user.name,
         action: actionObj.action,
         time: timeStr,
-        isEntry: actionObj.isEntry
+        isEntry: actionObj.isEntry,
       };
     });
 
@@ -159,10 +167,10 @@ const getGymOverview = asyncHandler(async (req, res, next) => {
           pendingAmount,
           pendingUsersCount,
           userGrowth,
-          liveActivity
+          liveActivity,
         },
-        "Gym overview data retrieved successfully"
-      )
+        "Gym overview data retrieved successfully",
+      ),
     );
   } catch (error) {
     return next(error);
@@ -170,5 +178,5 @@ const getGymOverview = asyncHandler(async (req, res, next) => {
 });
 
 module.exports = {
-  getGymOverview
+  getGymOverview,
 };

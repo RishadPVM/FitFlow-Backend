@@ -23,10 +23,13 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
+  // Get status code safely
+  const statusCode = Number(err.statusCode) || Number(err.status) || 500;
+
   // Custom AppError
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({
-      statusCode: err.statusCode,
+    return res.status(statusCode).json({
+      statusCode,
       success: false,
       message: err.message,
       data: err.data || null,
@@ -34,8 +37,8 @@ const errorHandler = (err, req, res, next) => {
   }
 
   // Validation errors or other JS errors
-  return res.status(500).json({
-    statusCode: 500,
+  return res.status(statusCode).json({
+    statusCode,
     success: false,
     message: err.message || 'Internal Server Error',
     data: null,
