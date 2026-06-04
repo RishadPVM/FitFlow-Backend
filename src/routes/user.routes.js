@@ -1,10 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/user.controller');
+const memberController = require('../controllers/member.controller');
 // const { authenticate } = require('../middleware/auth.middleware');
 
 // Protect all routes
 // router.use(authenticate);
+
+// Member Detail routes
+router.route('/members/:id')
+  .get(memberController.getMemberDetail);
+
+router.route('/members/:id/membership')
+  .patch(memberController.updateMemberMembership);
+
+router.route('/members/:id/attendance')
+  .get(memberController.getMemberAttendance);
+
+router.route('/members/:id/history')
+  .get(memberController.getMemberHistory);
 
 router.route('/')
   .get(controller.getUsers);
