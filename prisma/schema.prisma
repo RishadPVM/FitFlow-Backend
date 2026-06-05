@@ -70,6 +70,8 @@ model User {
 
 
   attendances Attendance[]
+  chatParticipants Participant[]
+  lastSeen         DateTime?
 }
 
 model Gym {
@@ -132,6 +134,9 @@ model Gym {
   attendanceSessions AttendanceSession[]
 
   attendances Attendance[]
+  conversations    Conversation[]
+  chatParticipants Participant[]
+  lastSeen         DateTime?
 }
 
 model UserMembershipPlans {
@@ -253,4 +258,107 @@ model Attendance {
 enum AttendanceMethod {
   QR
   MANUAL
+}
+
+// =========================================================================
+// Real-Time Chat & Communication Module
+// =========================================================================
+
+enum ConversationType {
+  PRIVATE
+  GROUP
+}
+
+enum SenderType {
+  USER
+  GYM
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  VOICE
+}
+
+model Conversation {
+  id             String           @id @default(uuid())
+  gymId          String
+  gym            Gym              @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  type           ConversationType
+  isDefaultGroup Boolean          @default(false)
+  title          String?          // e.g. "LEO Fitness Group" (only for GROUP)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  
+  participants   Participant[]
+  messages       Message[]
+
+  @@index([gymId])
+  @@index([type])
+}
+
+model Participant {
+  id                     String       @id @default(uuid())
+  conversationId         String
+  conversation           Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  // A participant is either a User (member) or Gym (admin)
+  userId                 String?
+  user                   User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gymId                  String?
+  gym                    Gym?         @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  
+  joinedAt               DateTime     @default(now())
+  
+  // Read and Delivery receipt markers
+  lastReadMessageId      String?
+  lastReadMessage        Message?     @relation("ReadReceipts", fields: [lastReadMessageId], references: [id])
+  lastDeliveredMessageId String?
+  lastDeliveredMessage   Message?     @relation("DeliveryReceipts", fields: [lastDeliveredMessageId], references: [id])
+  
+  unreadCount            Int          @default(0)
+
+  @@unique([conversationId, userId])
+  @@unique([conversationId, gymId])
+  @@index([userId])
+  @@index([gymId])
+  @@index([conversationId])
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  conversationId String
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderType     SenderType
+  senderId       String        // Points to either User.id or Gym.id
+  text           String?       @db.Text
+  type           MessageType   @default(TEXT)
+  duration       String?       // For voice/video duration (e.g. "0:14")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  attachments    Attachment[]
+  
+  // Receipts relations
+  readByParticipants      Participant[] @relation("ReadReceipts")
+  deliveredToParticipants Participant[] @relation("DeliveryReceipts")
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model Attachment {
+  id           String   @id @default(uuid())
+  messageId    String
+  message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url          String   // Public/Signed S3 URL
+  fileName     String
+  fileSize     Int      // In bytes
+  mimeType     String
+  duration     String?  // e.g. "0:14"
+  thumbnailUrl String?  // Optional generated thumbnail url for images/videos
+  createdAt    DateTime @default(now())
+
+  @@index([messageId])
 }

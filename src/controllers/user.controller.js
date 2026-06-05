@@ -106,6 +106,9 @@ const updateUser = asyncHandler(async (req, res, next) => {
           });
         }
 
+        // Hook group sync
+        await syncGymGroupMembership(tx, id, user.gymId, gymId);
+
         return await tx.user.update({
           where: { id },
           data,
@@ -146,6 +149,55 @@ const deleteUser = asyncHandler(async (req, res, next) => {
     return next(error);
   }
 });
+const syncGymGroupMembership = async (tx, userId, oldGymId, newGymId) => {
+  if (oldGymId === newGymId) return;
+
+  if (oldGymId) {
+    const oldGroup = await tx.conversation.findFirst({
+      where: { gymId: oldGymId, type: 'GROUP', isDefaultGroup: true }
+    });
+    if (oldGroup) {
+      await tx.participant.deleteMany({
+        where: { conversationId: oldGroup.id, userId }
+      });
+    }
+  }
+
+  if (newGymId) {
+    let newGroup = await tx.conversation.findFirst({
+      where: { gymId: newGymId, type: 'GROUP', isDefaultGroup: true }
+    });
+    if (!newGroup) {
+      const gym = await tx.gym.findUnique({ where: { id: newGymId } });
+      newGroup = await tx.conversation.create({
+        data: {
+          gymId: newGymId,
+          type: 'GROUP',
+          isDefaultGroup: true,
+          title: gym ? `${gym.gymName} Group` : 'LEO Fitness Group',
+          participants: {
+            create: [
+              { gymId: newGymId }
+            ]
+          }
+        }
+      });
+    }
+    await tx.participant.upsert({
+      where: {
+        conversationId_userId: {
+          conversationId: newGroup.id,
+          userId
+        }
+      },
+      update: {},
+      create: {
+        conversationId: newGroup.id,
+        userId
+      }
+    });
+  }
+};
 
 
 
@@ -256,6 +308,9 @@ const joinGymAndPlan = asyncHandler(async (req, res, next) => {
           },
         });
 
+      // Hook group sync
+      await syncGymGroupMembership(tx, userId, null, gymId);
+
       // UPDATE USER
       const updatedUser = await tx.user.update({
         where: {
@@ -336,6 +391,9 @@ const removeGymAndPlan = asyncHandler(async (req, res, next) => {
             },
           });
         }
+
+        // Hook group sync
+        await syncGymGroupMembership(tx, userId, gymId, null);
 
         // REMOVE USER FROM GYM
         const updatedUser = await tx.user.update({

@@ -1,7 +1,11 @@
+const http = require('http');
 const app = require('./app');
 const env = require('./config/env');
 const logger = require('./config/logger');
 const prisma = require('./config/database');
+const { initSocket } = require('./services/socket.service');
+
+const server = http.createServer(app);
 
 const startServer = async () => {
   try {
@@ -9,7 +13,11 @@ const startServer = async () => {
     await prisma.$connect();
     logger.info('Connected to the database successfully.');
 
-    app.listen(env.port, () => {
+    // Initialize WebSockets
+    initSocket(server);
+    logger.info('Socket.IO initialized successfully.');
+
+    server.listen(env.port, () => {
       logger.info('Server is running on port ' + env.port + ' in ' + env.nodeEnv + ' mode.');
     });
   } catch (error) {
