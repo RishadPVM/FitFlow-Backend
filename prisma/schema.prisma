@@ -72,6 +72,7 @@ model User {
   attendances Attendance[]
   chatParticipants Participant[]
   lastSeen         DateTime?
+  isOnline         Boolean @default(false)
 }
 
 model Gym {
@@ -137,6 +138,7 @@ model Gym {
   conversations    Conversation[]
   chatParticipants Participant[]
   lastSeen         DateTime?
+  isOnline         Boolean @default(false)
 }
 
 model UserMembershipPlans {
@@ -279,6 +281,7 @@ enum MessageType {
   IMAGE
   VIDEO
   VOICE
+  DOCUMENT
 }
 
 model Conversation {
@@ -337,6 +340,7 @@ model Message {
   duration       String?       // For voice/video duration (e.g. "0:14")
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  timestamp      DateTime      @default(now())
 
   attachments    Attachment[]
   
@@ -346,6 +350,7 @@ model Message {
 
   @@index([conversationId])
   @@index([createdAt])
+  @@index([timestamp])
 }
 
 model Attachment {

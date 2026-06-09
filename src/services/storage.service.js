@@ -16,15 +16,26 @@ const BUCKET_NAME = process.env.AWS_S3_BUCKET || 'fitflow-assets';
 
 // Strict file limitations
 const ALLOWED_MIME_TYPES = {
-  IMAGE: ['image/jpeg', 'image/png', 'image/gif'],
+  IMAGE: ['image/jpeg', 'image/png', 'image/gif', 'image/jpg', 'image/webp'],
   VIDEO: ['video/mp4', 'video/quicktime'],
-  VOICE: ['audio/mpeg', 'audio/aac', 'audio/wav', 'audio/m4a', 'audio/ogg', 'audio/mp4']
+  VOICE: ['audio/mpeg', 'audio/aac', 'audio/wav', 'audio/m4a', 'audio/x-m4a', 'audio/ogg', 'audio/mp4', 'audio/webm', 'audio/3gpp'],
+  DOCUMENT: [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+    'application/zip',
+    'application/octet-stream'
+  ]
 };
 
 const MAX_FILE_SIZES = {
   IMAGE: 10 * 1024 * 1024, // 10MB
   VIDEO: 50 * 1024 * 1024, // 50MB
-  VOICE: 10 * 1024 * 1024  // 10MB
+  VOICE: 10 * 1024 * 1024, // 10MB
+  DOCUMENT: 10 * 1024 * 1024 // 10MB
 };
 
 /**
@@ -39,8 +50,10 @@ const validateFile = (mimeType, fileSize) => {
     category = 'VIDEO';
   } else if (ALLOWED_MIME_TYPES.VOICE.includes(mimeType)) {
     category = 'VOICE';
+  } else if (ALLOWED_MIME_TYPES.DOCUMENT.includes(mimeType)) {
+    category = 'DOCUMENT';
   } else {
-    throw new AppError(400, null, `Mime type ${mimeType} is not supported. Supported: image, video, or audio files.`);
+    throw new AppError(400, null, `Mime type ${mimeType} is not supported. Supported: image, video, audio, or document files.`);
   }
 
   const maxLimit = MAX_FILE_SIZES[category];

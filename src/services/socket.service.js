@@ -158,8 +158,35 @@ const initSocket = (server) => {
           return msg;
         });
 
-        // Broadcast message to room
-        io.to(`conversation:${conversationId}`).emit('new_message', savedMessage);
+        // Resolve senderName
+        let senderName = 'Unknown';
+        if (savedMessage.senderType === 'USER') {
+          const user = await prisma.user.findUnique({
+            where: { id: savedMessage.senderId },
+            select: { name: true }
+          });
+          if (user) senderName = user.name;
+        } else if (savedMessage.senderType === 'GYM') {
+          const gym = await prisma.gym.findUnique({
+            where: { id: savedMessage.senderId },
+            select: { gymName: true }
+          });
+          if (gym) senderName = gym.gymName;
+        }
+
+        const messagePayload = {
+          ...savedMessage,
+          senderName
+        };
+
+        // Broadcast message to all participants' personal rooms to update chat list and conversation in real-time
+        const participants = await prisma.participant.findMany({
+          where: { conversationId }
+        });
+        for (const p of participants) {
+          const personalRoom = p.userId ? `user:${p.userId}` : `gym:${p.gymId}`;
+          io.to(personalRoom).emit('new_message', messagePayload);
+        }
 
         // Fetch other participants to notify unread counts
         const otherParticipants = await prisma.participant.findMany({
@@ -273,6 +300,22 @@ const initSocket = (server) => {
       
       // If user is fully offline (no sockets remaining), notify other clients
       if (!presenceState.isOnline) {
+        try {
+          if (isGym) {
+            await prisma.gym.update({
+              where: { id: clientId },
+              data: { isOnline: false, lastSeen: presenceState.lastSeen ? new Date(presenceState.lastSeen) : new Date() }
+            });
+          } else {
+            await prisma.user.update({
+              where: { id: clientId },
+              data: { isOnline: false, lastSeen: presenceState.lastSeen ? new Date(presenceState.lastSeen) : new Date() }
+            });
+          }
+        } catch (dbErr) {
+          logger.error('Error updating status on disconnect:', dbErr);
+        }
+
         socket.broadcast.emit('presence_update', {
           id: clientId,
           isOnline: false,
@@ -290,8 +333,24 @@ const initSocket = (server) => {
       const personalRoom = isGym ? `gym:${clientId}` : `user:${clientId}`;
       socket.join(personalRoom);
 
-      // 2. Set online state in Redis & notify active connections
+      // 2. Set online state in Redis, update DB & notify active connections
       await redisService.setOnline(clientId, isGym, socket.id);
+      try {
+        if (isGym) {
+          await prisma.gym.update({
+            where: { id: clientId },
+            data: { isOnline: true }
+          });
+        } else {
+          await prisma.user.update({
+            where: { id: clientId },
+            data: { isOnline: true }
+          });
+        }
+      } catch (dbErr) {
+        logger.error('Error updating status on connect:', dbErr);
+      }
+
       socket.broadcast.emit('presence_update', {
         id: clientId,
         isOnline: true,

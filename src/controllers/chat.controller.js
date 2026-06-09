@@ -20,17 +20,17 @@ const getConversations = asyncHandler(async (req, res, next) => {
         conversation: {
           include: {
             messages: {
-              orderBy: { createdAt: 'desc' },
+              orderBy: { timestamp: 'desc' },
               take: 1,
               include: { attachments: true }
             },
             participants: {
               include: {
                 user: {
-                  select: { id: true, name: true, profileImage: true, lastSeen: true }
+                  select: { id: true, name: true, profileImage: true, lastSeen: true, isOnline: true }
                 },
                 gym: {
-                  select: { id: true, gymName: true, logoUrl: true, lastSeen: true }
+                  select: { id: true, gymName: true, logoUrl: true, lastSeen: true, isOnline: true }
                 }
               }
             }
@@ -48,22 +48,47 @@ const getConversations = asyncHandler(async (req, res, next) => {
       const conv = p.conversation;
       const lastMsg = conv.messages[0] || null;
 
+      let lastMsgSenderName = null;
+      if (lastMsg) {
+        if (lastMsg.senderType === 'USER') {
+          const user = await prisma.user.findUnique({
+            where: { id: lastMsg.senderId },
+            select: { name: true }
+          });
+          lastMsgSenderName = user ? user.name : 'Unknown';
+        } else if (lastMsg.senderType === 'GYM') {
+          const gym = await prisma.gym.findUnique({
+            where: { id: lastMsg.senderId },
+            select: { gymName: true }
+          });
+          lastMsgSenderName = gym ? gym.gymName : 'Unknown';
+        }
+      }
+
       // Extract private chat counterpart contact profile
-      const otherParticipant = conv.participants.find(cp => 
-        isGym ? cp.userId !== null : cp.gymId !== null
-      );
+      const otherParticipant = conv.participants.find(cp => {
+        if (isGym) {
+          // Gym caller: counterpart is User/Member
+          return cp.userId !== null;
+        } else {
+          // User caller: counterpart is either a Gym or another User
+          if (cp.gymId !== null) return true;
+          return cp.userId !== null && cp.userId !== clientId;
+        }
+      });
 
       let contact = null;
       if (otherParticipant) {
         const profile = otherParticipant.user || otherParticipant.gym;
         if (profile) {
-          const isOnline = await redisService.getPresenceStatus(profile.id);
+          const isOnline = (await redisService.getPresenceStatus(profile.id)) || profile.isOnline || false;
           contact = {
             id: profile.id,
             name: otherParticipant.user ? profile.name : profile.gymName,
             profileImage: otherParticipant.user ? profile.profileImage : profile.logoUrl,
             isOnline,
-            lastSeen: profile.lastSeen
+            lastSeen: profile.lastSeen,
+            role: otherParticipant.user ? 'USER' : 'GYM'
           };
         }
       }
@@ -89,8 +114,10 @@ const getConversations = asyncHandler(async (req, res, next) => {
           text: lastMsg.text,
           type: lastMsg.type,
           createdAt: lastMsg.createdAt,
+          timestamp: lastMsg.timestamp,
           senderId: lastMsg.senderId,
-          senderType: lastMsg.senderType
+          senderType: lastMsg.senderType,
+          senderName: lastMsgSenderName
         } : null,
         contact
       };
@@ -105,13 +132,16 @@ const getConversations = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * Admin creates new private chat with a gym member
+ * Admin creates new private chat with a gym member, or User starts chat with Gym / User
  */
 const createConversation = asyncHandler(async (req, res, next) => {
   try {
     const isGymOwner = req.user.role === 'GYM_OWNER';
     let targetGymId;
     let targetMemberId;
+    let isUserToUser = false;
+    let userAId;
+    let userBId;
 
     if (isGymOwner) {
       const { memberId } = req.body;
@@ -128,39 +158,92 @@ const createConversation = asyncHandler(async (req, res, next) => {
       targetGymId = req.user.userId;
       targetMemberId = memberId;
     } else {
-      const { gymId } = req.body;
-      if (!gymId) {
-        throw new AppError(400, null, 'Gym ID is required');
+      // It's a USER. They can start chat with a gym (gymId) OR another user (userId)
+      const { gymId, userId } = req.body;
+      if (!gymId && !userId) {
+        throw new AppError(400, null, 'Either Gym ID or User ID is required');
       }
-      // Verify gym exists
-      const gym = await prisma.gym.findUnique({
-        where: { id: gymId }
-      });
-      if (!gym) {
-        throw new AppError(404, null, 'Gym not found');
+
+      if (userId) {
+        isUserToUser = true;
+        userAId = req.user.userId;
+        userBId = userId;
+
+        // Verify other user exists
+        const otherUser = await prisma.user.findUnique({
+          where: { id: userId }
+        });
+        if (!otherUser) {
+          throw new AppError(404, null, 'Other user not found');
+        }
+
+        // Both users must belong to a gym
+        const me = await prisma.user.findUnique({
+          where: { id: req.user.userId }
+        });
+        if (!me.gymId || me.gymId !== otherUser.gymId) {
+          throw new AppError(400, null, 'Both users must belong to the same gym');
+        }
+        targetGymId = me.gymId;
+      } else {
+        // User-to-Gym chat (existing flow)
+        const gym = await prisma.gym.findUnique({
+          where: { id: gymId }
+        });
+        if (!gym) {
+          throw new AppError(404, null, 'Gym not found');
+        }
+        targetGymId = gymId;
+        targetMemberId = req.user.userId;
       }
-      targetGymId = gymId;
-      targetMemberId = req.user.userId;
     }
 
     // Check if conversation already exists
-    let conversation = await prisma.conversation.findFirst({
-      where: {
-        type: 'PRIVATE',
-        gymId: targetGymId,
-        participants: {
-          some: { userId: targetMemberId }
-        }
-      },
-      include: {
-        participants: {
-          include: {
-            user: { select: { id: true, name: true, profileImage: true } },
-            gym: { select: { id: true, gymName: true, logoUrl: true } }
+    let conversation;
+    if (isUserToUser) {
+      conversation = await prisma.conversation.findFirst({
+        where: {
+          type: 'PRIVATE',
+          gymId: targetGymId,
+          AND: [
+            { participants: { some: { userId: userAId } } },
+            { participants: { some: { userId: userBId } } }
+          ]
+        },
+        include: {
+          participants: {
+            include: {
+              user: { select: { id: true, name: true, profileImage: true } },
+              gym: { select: { id: true, gymName: true, logoUrl: true } }
+            }
           }
         }
-      }
-    });
+      });
+    } else {
+      conversation = await prisma.conversation.findFirst({
+        where: {
+          type: 'PRIVATE',
+          gymId: targetGymId,
+          participants: {
+            some: { userId: targetMemberId }
+          },
+          // Ensure it's not a User-to-User conversation
+          NOT: {
+            participants: {
+              some: { gymId: null, userId: { not: targetMemberId } }
+            }
+          }
+        },
+        include: {
+          participants: {
+            include: {
+              user: { select: { id: true, name: true, profileImage: true } },
+              gym: { select: { id: true, gymName: true, logoUrl: true } }
+            }
+          }
+        }
+      });
+    }
 
     if (conversation) {
       return res.status(200).json(
@@ -169,15 +252,16 @@ const createConversation = asyncHandler(async (req, res, next) => {
     }
 
     // Create a new private conversation
+    const createParticipants = isUserToUser
+      ? [ { userId: userAId }, { userId: userBId } ]
+      : [ { gymId: targetGymId }, { userId: targetMemberId } ];
+
     conversation = await prisma.conversation.create({
       data: {
         type: 'PRIVATE',
         gymId: targetGymId,
         participants: {
-          create: [
-            { gymId: targetGymId },
-            { userId: targetMemberId }
-          ]
+          create: createParticipants
         }
       },
       include: {
@@ -225,7 +309,7 @@ const getMessages = asyncHandler(async (req, res, next) => {
     // Build paginated query
     const query = {
       where: { conversationId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { timestamp: 'desc' },
       take: parsedLimit + 1,
       include: { attachments: true }
     };
@@ -243,8 +327,32 @@ const getMessages = asyncHandler(async (req, res, next) => {
       nextCursor = nextItem.id;
     }
 
+    // Resolve sender names using high-performance batch query
+    const userIds = [...new Set(messages.filter(m => m.senderType === 'USER').map(m => m.senderId))];
+    const gymIds = [...new Set(messages.filter(m => m.senderType === 'GYM').map(m => m.senderId))];
+
+    const [users, gyms] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, name: true }
+      }),
+      prisma.gym.findMany({
+        where: { id: { in: gymIds } },
+        select: { id: true, gymName: true }
+      })
+    ]);
+
+    const senderMap = new Map();
+    users.forEach(u => senderMap.set(u.id, u.name));
+    gyms.forEach(g => senderMap.set(g.id, g.gymName));
+
+    const messagesWithSender = messages.map(msg => ({
+      ...msg,
+      senderName: senderMap.get(msg.senderId) || 'Unknown'
+    }));
+
     // Sort to chronological order for client consumption
-    const sortedMessages = messages.reverse();
+    const sortedMessages = messagesWithSender.reverse();
 
     return res.status(200).json(
       new ApiResponse(200, {
