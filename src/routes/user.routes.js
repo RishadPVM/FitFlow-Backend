@@ -28,6 +28,9 @@ router.route('/:id')
   .put(controller.updateUser)
   .delete(controller.deleteUser);
 
+router.route('/:id/upload-ticket')
+  .post(controller.getProfileUploadTicket);
+
 router.route('/:id/payments')
   .get(controller.getUserPayments);
 

@@ -2,6 +2,7 @@ const asyncHandler = require('../utils/async-handler');
 const ApiResponse = require('../utils/api-response');
 const AppError = require("../utils/app-error");
 const prisma = require('../config/database');
+const storageService = require('../services/storage.service');
 
 
 const getUsers = asyncHandler(async (req, res, next) => {
@@ -34,7 +35,7 @@ const getUser = asyncHandler(async (req, res, next) => {
 const updateUser = asyncHandler(async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, role, isActive, membershipPlanId, gymId } = req.body;
+    const { name, email, phone, role, isActive, membershipPlanId, gymId, profilePic, dateOfBirth, gender } = req.body;
     if (!id) {
       throw new AppError(400, null, 'User ID is required');
     }
@@ -51,9 +52,25 @@ const updateUser = asyncHandler(async (req, res, next) => {
     const data = {};
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = email;
-    if (phone !== undefined) data.phone = phone;
+    if (phone !== undefined) data.phone = (phone === '' || phone === null) ? null : phone;
     if (role !== undefined) data.role = role;
     if (isActive !== undefined) data.isActive = isActive;
+    if (profilePic !== undefined) data.profileImage = profilePic;
+    if (dateOfBirth !== undefined) {
+      data.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+    }
+    if (gender !== undefined) {
+      if (gender === null) {
+        data.gender = null;
+      } else {
+        const lowerGender = gender.toString().toLowerCase();
+        if (['male', 'female', 'other'].includes(lowerGender)) {
+          data.gender = lowerGender;
+        } else {
+          throw new AppError(400, null, 'Invalid gender value. Must be male, female, or other.');
+        }
+      }
+    }
 
     let updatedUser;
 
@@ -461,6 +478,44 @@ const getUserPayments = asyncHandler(async (req, res, next) => {
   }
 });
 
+const getProfileUploadTicket = asyncHandler(async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { fileName, fileSize, mimeType } = req.body;
+
+    if (!id) {
+      throw new AppError(400, null, 'User ID is required');
+    }
+    if (!fileName || !fileSize || !mimeType) {
+      throw new AppError(400, null, 'fileName, fileSize, and mimeType are required');
+    }
+
+    // Verify user exists
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new AppError(404, null, 'User not found');
+    }
+
+    const requestBaseUrl = `${req.protocol}://${req.get('host')}`;
+
+    const ticket = await storageService.getPresignedUploadUrl(
+      null,
+      null,
+      fileName,
+      fileSize,
+      mimeType,
+      requestBaseUrl,
+      id
+    );
+
+    return res.status(200).json(
+      new ApiResponse(200, ticket, 'Profile upload ticket generated successfully')
+    );
+  } catch (error) {
+    return next(error);
+  }
+});
+
 module.exports = {
   getUsers,
   getUser,
@@ -468,5 +523,6 @@ module.exports = {
   deleteUser,
   joinGymAndPlan,
   removeGymAndPlan,
-  getUserPayments
+  getUserPayments,
+  getProfileUploadTicket
 };

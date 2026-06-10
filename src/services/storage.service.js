@@ -67,13 +67,19 @@ const validateFile = (mimeType, fileSize) => {
 /**
  * Generate S3 Presigned Upload URL (PUT method)
  */
-const getPresignedUploadUrl = async (gymId, conversationId, fileName, fileSize, mimeType, requestBaseUrl = '') => {
+const getPresignedUploadUrl = async (gymId, conversationId, fileName, fileSize, mimeType, requestBaseUrl = '', userId = null) => {
   try {
     const category = validateFile(mimeType, fileSize);
     
-    // Unique key: gyms/${gymId}/conversations/${conversationId}/${Date.now()}_${fileName}
     const cleanFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = `gyms/${gymId}/conversations/${conversationId}/${Date.now()}_${cleanFileName}`;
+    let key;
+    if (userId) {
+      key = `users/${userId}/profile/${Date.now()}_${cleanFileName}`;
+    } else if (gymId && conversationId) {
+      key = `gyms/${gymId}/conversations/${conversationId}/${Date.now()}_${cleanFileName}`;
+    } else {
+      key = `general/${Date.now()}_${cleanFileName}`;
+    }
 
     const isMock = !process.env.AWS_ACCESS_KEY_ID || 
                    process.env.AWS_ACCESS_KEY_ID === 'mock-key' ||
