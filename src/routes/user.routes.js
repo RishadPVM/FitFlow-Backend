@@ -34,6 +34,14 @@ router.route('/:id/upload-ticket')
 router.route('/:id/payments')
   .get(controller.getUserPayments);
 
+router.route('/:id/weight-logs')
+  .get(controller.getWeightLogs)
+  .post(controller.logWeight);
+
+router.route('/:id/target-logs')
+  .get(controller.getTargetLogs)
+  .post(controller.logTarget);
+
 router.route('/join-gym-and-plan/:userId')
   .post(controller.joinGymAndPlan);
 

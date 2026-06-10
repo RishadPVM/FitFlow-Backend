@@ -516,6 +516,128 @@ const getProfileUploadTicket = asyncHandler(async (req, res, next) => {
   }
 });
 
+const getWeightLogs = asyncHandler(async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, null, 'User ID is required');
+    }
+
+    const logs = await prisma.weightLog.findMany({
+      where: { userId: id },
+      orderBy: { loggedAt: 'desc' }
+    });
+
+    res.status(200).json(new ApiResponse(200, logs, 'Weight logs retrieved successfully'));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+const logWeight = asyncHandler(async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { weight } = req.body;
+
+    if (!id) {
+      throw new AppError(400, null, 'User ID is required');
+    }
+    if (weight === undefined || weight === null || isNaN(Number(weight))) {
+      throw new AppError(400, null, 'Valid weight is required');
+    }
+
+    const numericWeight = Number(weight);
+
+    // Transaction to create log and update User's currentWeight
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create WeightLog
+      const log = await tx.weightLog.create({
+        data: {
+          userId: id,
+          weight: numericWeight
+        }
+      });
+
+      // 2. Update User's currentWeight
+      const updatedUser = await tx.user.update({
+        where: { id },
+        data: { currentWeight: numericWeight },
+        include: {
+          gym: true,
+          currentMembershipPlan: true
+        }
+      });
+
+      return { log, updatedUser };
+    });
+
+    res.status(201).json(new ApiResponse(201, result, 'Weight logged successfully'));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+const getTargetLogs = asyncHandler(async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, null, 'User ID is required');
+    }
+
+    const logs = await prisma.targetLog.findMany({
+      where: { userId: id },
+      orderBy: { loggedAt: 'desc' }
+    });
+
+    res.status(200).json(new ApiResponse(200, logs, 'Target logs retrieved successfully'));
+  } catch (error) {
+    return next(error);
+  }
+});
+
+const logTarget = asyncHandler(async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { target } = req.body;
+
+    if (!id) {
+      throw new AppError(400, null, 'User ID is required');
+    }
+    if (target === undefined || target === null || isNaN(Number(target))) {
+      throw new AppError(400, null, 'Valid target weight is required');
+    }
+
+    const numericTarget = Number(target);
+
+    // Transaction to create log and update User's targetWeight
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create TargetLog
+      const log = await tx.targetLog.create({
+        data: {
+          userId: id,
+          target: numericTarget
+        }
+      });
+
+      // 2. Update User's targetWeight
+      const updatedUser = await tx.user.update({
+        where: { id },
+        data: { targetWeight: numericTarget },
+        include: {
+          gym: true,
+          currentMembershipPlan: true
+        }
+      });
+
+      return { log, updatedUser };
+    });
+
+    res.status(201).json(new ApiResponse(201, result, 'Target logged successfully'));
+  } catch (error) {
+    return next(error);
+  }
+});
+
 module.exports = {
   getUsers,
   getUser,
@@ -524,5 +646,9 @@ module.exports = {
   joinGymAndPlan,
   removeGymAndPlan,
   getUserPayments,
-  getProfileUploadTicket
+  getProfileUploadTicket,
+  getWeightLogs,
+  logWeight,
+  getTargetLogs,
+  logTarget
 };

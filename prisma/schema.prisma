@@ -73,6 +73,9 @@ model User {
   chatParticipants Participant[]
   lastSeen         DateTime?
   isOnline         Boolean @default(false)
+
+  weightLogs   WeightLog[]
+  targetLogs   TargetLog[]
 }
 
 model Gym {
@@ -382,4 +385,26 @@ model Notice {
 
   @@index([gymId])
   @@index([startDate, endDate])
+}
+
+model WeightLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weight    Float
+  loggedAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([loggedAt])
+}
+
+model TargetLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  target    Float
+  loggedAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([loggedAt])
 }
