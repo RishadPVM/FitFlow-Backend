@@ -133,6 +133,7 @@ model Gym {
   membershipPlans MembershipPlan[]
   users           User[]
   attendanceSessions AttendanceSession[]
+  notices         Notice[]
 
   attendances Attendance[]
   conversations    Conversation[]
@@ -366,4 +367,19 @@ model Attachment {
   createdAt    DateTime @default(now())
 
   @@index([messageId])
+}
+
+model Notice {
+  id        String   @id @default(uuid())
+  title     String
+  message   String   @db.Text
+  startDate DateTime
+  endDate   DateTime
+  gymId     String?
+  gym       Gym?     @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gymId])
+  @@index([startDate, endDate])
 }

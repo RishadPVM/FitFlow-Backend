@@ -435,11 +435,38 @@ const removeGymAndPlan = asyncHandler(async (req, res, next) => {
   }
 });
 
+const getUserPayments = asyncHandler(async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, null, 'User ID is required');
+    }
+
+    // Check if user exists
+    const userExists = await prisma.user.findUnique({
+      where: { id }
+    });
+    if (!userExists) {
+      throw new AppError(404, null, 'User not found');
+    }
+
+    const payments = await prisma.userMembershipPlans.findMany({
+      where: { userId: id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.status(200).json(new ApiResponse(200, payments, 'User payments retrieved successfully'));
+  } catch (error) {
+    return next(error);
+  }
+});
+
 module.exports = {
   getUsers,
   getUser,
   updateUser,
   deleteUser,
   joinGymAndPlan,
-  removeGymAndPlan
+  removeGymAndPlan,
+  getUserPayments
 };

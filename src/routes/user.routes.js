@@ -28,6 +28,9 @@ router.route('/:id')
   .put(controller.updateUser)
   .delete(controller.deleteUser);
 
+router.route('/:id/payments')
+  .get(controller.getUserPayments);
+
 router.route('/join-gym-and-plan/:userId')
   .post(controller.joinGymAndPlan);
 

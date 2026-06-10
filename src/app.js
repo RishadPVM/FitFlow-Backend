@@ -13,6 +13,7 @@ const membershipPlanRoutes = require("./routes/membership-plan.routes");
 const gymOverviewRoutes = require("./routes/gym.overview.routes");
 const attendanceRoutes = require("./routes/attendance.roures");
 const chatRoutes = require("./routes/chat.routes");
+const noticeRoutes = require("./routes/notice.routes");
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use("/api/v1/membership-plans", membershipPlanRoutes);
 app.use('/api/v1/gym/overview', gymOverviewRoutes);
 app.use('/api/v1/attendance', attendanceRoutes);
 app.use('/api/v1/chats', chatRoutes);
+app.use('/api/v1/notices', noticeRoutes);
 
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
