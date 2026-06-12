@@ -14,7 +14,14 @@ router.route('/:id')
   .put(controller.updateGym)
   .delete(controller.deleteGym);
 
+router.route('/:id/upload-ticket')
+  .post(controller.getGymUploadTicket);
+
 router.route('/:id/members')
   .get(controller.getGymMembers);
 
+router.route('/:id/finance')
+  .get(controller.getGymFinanceOverview);
+
 module.exports = router;
+

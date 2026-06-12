@@ -8,5 +8,9 @@ module.exports = {
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'super-refresh-secret-key',
   jwtAcessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '1d',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
-  // googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+  smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
+  smtpUser: process.env.SMTP_USER || '',
+  smtpPass: process.env.SMTP_PASS || '',
+  smtpFrom: process.env.SMTP_FROM || 'noreply@gymos.com',
 };

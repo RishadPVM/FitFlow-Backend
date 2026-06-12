@@ -77,6 +77,8 @@ const getPresignedUploadUrl = async (gymId, conversationId, fileName, fileSize, 
       key = `users/${userId}/profile/${Date.now()}_${cleanFileName}`;
     } else if (gymId && conversationId) {
       key = `gyms/${gymId}/conversations/${conversationId}/${Date.now()}_${cleanFileName}`;
+    } else if (gymId) {
+      key = `gyms/${gymId}/profile/${Date.now()}_${cleanFileName}`;
     } else {
       key = `general/${Date.now()}_${cleanFileName}`;
     }
