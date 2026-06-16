@@ -5,20 +5,16 @@ const env = require("../config/env");
 const transporter = nodemailer.createTransport({
   host: env.smtpHost,
   port: env.smtpPort,
-  secure: env.smtpPort === 465, // true for 465, false for other ports
+  secure: true,
   auth: {
     user: env.smtpUser,
     pass: env.smtpPass,
   },
 });
 
-/**
- * Send Password Reset OTP Email
- * @param {string} toEmail 
- * @param {string} otp 
- */
+
+
 const sendOtpEmail = async (toEmail, otp) => {
-  // If SMTP user is not set, log the OTP in development
   if (!env.smtpUser || !env.smtpPass) {
     console.log(`========================================`);
     console.log(`[DEV EMAIL SIMULATION]`);
