@@ -12,5 +12,5 @@ module.exports = {
   smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASS || '',
-  smtpFrom: process.env.SMTP_FROM || 'noreply@gymos.com',
+  smtpFrom: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@gymos.com',
 };

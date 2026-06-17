@@ -6,6 +6,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const env = require("../../config/env");
 const { sendOtpEmail } = require("../../services/email.service");
+const logger = require("../../config/logger");
 
 // Helper to get client IP and User Agent
 const getClientInfo = (req) => {
@@ -24,7 +25,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
   if (!email) {
     throw new AppError(400, null, "Email address is required");
   }
-
+   logger.info("Email : ", email);
   // Email format validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
@@ -43,6 +44,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
   // To prevent user enumeration, return success even if user doesn't exist
   if (!admin) {
+    logger.info("Admin not found");
     return res.status(200).json(
       new ApiResponse(200, null, "OTP sent successfully")
     );
@@ -56,7 +58,6 @@ const forgotPassword = asyncHandler(async (req, res) => {
       createdAt: { gte: oneDayAgo },
     },
   });
-
   if (existingRequest && existingRequest.resendCount >= 3) {
     throw new AppError(429, null, "Max OTP resends reached for today. Please try again tomorrow.");
   }
@@ -83,9 +84,9 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
   // Send Email
   try {
+   
     await sendOtpEmail(normalizedEmail, otp);
   } catch (emailError) {
-    console.error("Failed to send OTP email:", emailError);
     throw new AppError(500, null, "Failed to send OTP email. Please try again later.");
   }
 

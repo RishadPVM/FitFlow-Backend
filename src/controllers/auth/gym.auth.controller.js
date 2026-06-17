@@ -4,6 +4,9 @@ const ApiResponse = require("../../utils/api-response");
 const AppError = require('../../utils/app-error');
 const bcrypt = require("bcrypt");
 const { generateAcessToken, generateRefreshToken } = require("../../services/jwt.service");
+const jwt = require("jsonwebtoken");
+const env = require("../../config/env");
+const { sendOtpEmail } = require("../../services/email.service");
 
 
 
@@ -73,7 +76,26 @@ const createGym = asyncHandler(async (req, res) => {
     licenseNumber,
 
     password,
+    emailVerificationToken,
   } = req.body;
+
+  // =====================================================
+  // EMAIL VERIFICATION TOKEN VALIDATION
+  // =====================================================
+  if (!emailVerificationToken) {
+    throw new AppError(400, null, "Email verification is required. Please verify your email first.");
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(emailVerificationToken, env.jwtAcessSecret);
+  } catch (err) {
+    throw new AppError(400, null, "Email verification token is invalid or expired. Please verify your email again.");
+  }
+
+  if (decoded.purpose !== "email-verification" || decoded.email.toLowerCase().trim() !== email.toLowerCase().trim()) {
+    throw new AppError(400, null, "Email verification token does not match the registration email.");
+  }
 
   // =====================================================
   // REQUIRED FIELD VALIDATION
@@ -304,7 +326,151 @@ const loginGym = asyncHandler(async (req, res, next) => {
 });
 
 
+/**
+ * Send Signup OTP Code
+ * POST /api/v1/auth/signup-otp
+ */
+const signupOtp = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw new AppError(400, null, "Email address is required");
+  }
+
+  // Email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    throw new AppError(400, null, "Invalid email address format");
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Check if gym already exists
+  const existingGym = await prisma.gym.findFirst({
+    where: { 
+      email: normalizedEmail,
+      deletedAt: null,
+    },
+  });
+
+  if (existingGym) {
+    throw new AppError(409, null, "Email already registered");
+  }
+
+  // Check resend count in the last 24 hours
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const existingRequest = await prisma.passwordResetRequest.findFirst({
+    where: {
+      email: normalizedEmail,
+      createdAt: { gte: oneDayAgo },
+    },
+  });
+
+  if (existingRequest && existingRequest.resendCount >= 3) {
+    throw new AppError(429, null, "Max OTP resends reached for today. Please try again tomorrow.");
+  }
+
+  // Generate 6-digit OTP code (cryptographically secure)
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const otpHash = await bcrypt.hash(otp, 10);
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+  // Delete previous reset/signup requests for this email
+  await prisma.passwordResetRequest.deleteMany({
+    where: { email: normalizedEmail },
+  });
+
+  await prisma.passwordResetRequest.create({
+    data: {
+      email: normalizedEmail,
+      otpHash,
+      expiresAt,
+      resendCount: existingRequest ? existingRequest.resendCount + 1 : 0,
+    },
+  });
+
+  // Send Email
+  try {
+    await sendOtpEmail(normalizedEmail, otp, 'signup');
+  } catch (emailError) {
+    console.error("Failed to send OTP email:", emailError);
+    throw new AppError(500, null, "Failed to send OTP email. Please try again later.");
+  }
+
+  return res.status(200).json(
+    new ApiResponse(200, null, "Verification code sent successfully")
+  );
+});
+
+/**
+ * Verify Signup OTP Code
+ * POST /api/v1/auth/verify-signup-otp
+ */
+const verifySignupOtp = asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    throw new AppError(400, null, "Email and OTP are required");
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Find active request
+  const request = await prisma.passwordResetRequest.findFirst({
+    where: { email: normalizedEmail },
+  });
+
+  if (!request) {
+    throw new AppError(400, null, "No signup verification request found or OTP was already verified");
+  }
+
+  // Check attempt limits (Max 5)
+  if (request.attempts >= 5) {
+    throw new AppError(429, null, "Too many failed attempts. Please request a new OTP.");
+  }
+
+  // Check expiry (5 minutes)
+  if (new Date() > request.expiresAt) {
+    throw new AppError(400, null, "OTP has expired. Please request a new one.");
+  }
+
+  // Verify OTP
+  const isOtpValid = await bcrypt.compare(otp, request.otpHash);
+
+  if (!isOtpValid) {
+    // Increment attempts
+    await prisma.passwordResetRequest.update({
+      where: { id: request.id },
+      data: { attempts: request.attempts + 1 },
+    });
+
+    const attemptsRemaining = 5 - (request.attempts + 1);
+    throw new AppError(400, null, `Invalid OTP code. ${attemptsRemaining} attempts remaining.`);
+  }
+
+  // Generate temporary email verification token (Expires in 15 minutes)
+  const token = jwt.sign(
+    { 
+      email: normalizedEmail, 
+      purpose: "email-verification" 
+    },
+    env.jwtAcessSecret,
+    { expiresIn: "15m" }
+  );
+
+  // Invalidate OTP (Delete from database to prevent replay attacks)
+  await prisma.passwordResetRequest.delete({
+    where: { id: request.id },
+  });
+
+  return res.status(200).json(
+    new ApiResponse(200, { token }, "Email verified successfully")
+  );
+});
+
 module.exports = {
   createGym,
   loginGym,
+  signupOtp,
+  verifySignupOtp,
 };

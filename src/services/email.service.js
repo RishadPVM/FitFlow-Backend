@@ -14,12 +14,15 @@ const transporter = nodemailer.createTransport({
 
 
 
-const sendOtpEmail = async (toEmail, otp) => {
+const sendOtpEmail = async (toEmail, otp, type = 'forgot-password') => {
+  const isSignup = type === 'signup';
+  const subject = isSignup ? "Verify Your Gym Admin Email Address" : "Reset Your Gym Admin Password";
+
   if (!env.smtpUser || !env.smtpPass) {
     console.log(`========================================`);
     console.log(`[DEV EMAIL SIMULATION]`);
     console.log(`To: ${toEmail}`);
-    console.log(`Subject: Reset Your Gym Admin Password`);
+    console.log(`Subject: ${subject}`);
     console.log(`Verification Code: ${otp}`);
     console.log(`========================================`);
     return { simulated: true, otp };
@@ -28,15 +31,17 @@ const sendOtpEmail = async (toEmail, otp) => {
   const mailOptions = {
     from: `"FitFlow Admin" <${env.smtpFrom}>`,
     to: toEmail,
-    subject: "Reset Your Gym Admin Password",
-    text: `Your verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not request this password reset, please ignore this email.`,
+    subject: subject,
+    text: isSignup 
+      ? `Welcome to FitFlow! Your verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not initiate this sign-up request, please ignore this email.`
+      : `Your verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not request this password reset, please ignore this email.`,
     html: `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Reset Your Gym Admin Password</title>
+        <title>${subject}</title>
         <style>
           body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -119,8 +124,12 @@ const sendOtpEmail = async (toEmail, otp) => {
         <div class="email-wrapper">
           <div class="card">
             <div class="logo">FitFlow</div>
-            <h1 class="title">Reset Your Gym Admin Password</h1>
-            <p class="subtitle">Your verification code is listed below. Use this code to complete your password reset request.</p>
+            <h1 class="title">${isSignup ? "Verify Your Gym Admin Email Address" : "Reset Your Gym Admin Password"}</h1>
+            <p class="subtitle">
+              ${isSignup 
+                ? "Welcome to FitFlow! Your email verification code is listed below. Use this code to verify your email address and complete your Gym account registration." 
+                : "Your verification code is listed below. Use this code to complete your password reset request."}
+            </p>
             
             <div class="otp-container">
               <div class="otp-code">${otp}</div>
@@ -131,7 +140,9 @@ const sendOtpEmail = async (toEmail, otp) => {
             <div class="divider"></div>
             
             <p class="footer">
-              If you did not request this password reset, please ignore this email. Your password will remain unchanged.
+              ${isSignup 
+                ? "If you did not initiate this sign-up request, please ignore this email. No account will be created without this verification." 
+                : "If you did not request this password reset, please ignore this email. Your password will remain unchanged."}
             </p>
           </div>
         </div>

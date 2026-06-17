@@ -413,8 +413,8 @@ model TargetLog {
 
 model PasswordResetRequest {
   id          String   @id @default(uuid())
-  adminId     String
-  admin       Gym      @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  adminId     String?
+  admin       Gym?     @relation(fields: [adminId], references: [id], onDelete: Cascade)
   email       String
   otpHash     String
   expiresAt   DateTime
