@@ -12,10 +12,16 @@ const getConversations = asyncHandler(async (req, res, next) => {
   try {
     const clientId = req.user.userId;
     const isGym = req.user.role === 'GYM_OWNER';
+    const { gymId } = req.query;
+
+    const whereClause = {
+      ...(isGym ? { gymId: clientId } : { userId: clientId }),
+      ...(gymId ? { conversation: { gymId } } : {})
+    };
 
     // Find all participants matching user or gym
     const participants = await prisma.participant.findMany({
-      where: isGym ? { gymId: clientId } : { userId: clientId },
+      where: whereClause,
       include: {
         conversation: {
           include: {
@@ -156,6 +162,9 @@ const createConversation = asyncHandler(async (req, res, next) => {
         throw new AppError(404, null, 'Gym member not found');
       }
       targetGymId = req.user.userId;
+      if (member.gymId !== targetGymId) {
+        throw new AppError(403, null, 'User is not registered in this gym');
+      }
       targetMemberId = memberId;
     } else {
       // It's a USER. They can start chat with a gym (gymId) OR another user (userId)
@@ -192,6 +201,13 @@ const createConversation = asyncHandler(async (req, res, next) => {
         });
         if (!gym) {
           throw new AppError(404, null, 'Gym not found');
+        }
+        // Verify user belongs to this gym
+        const me = await prisma.user.findUnique({
+          where: { id: req.user.userId }
+        });
+        if (me.gymId !== gymId) {
+          throw new AppError(403, null, 'You can only start a chat with your registered gym');
         }
         targetGymId = gymId;
         targetMemberId = req.user.userId;
