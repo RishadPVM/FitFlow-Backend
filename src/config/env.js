@@ -13,4 +13,11 @@ module.exports = {
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASS || '',
   smtpFrom: process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@gymos.com',
+  redisHost: process.env.REDIS_HOST || '127.0.0.1',
+  redisPort: parseInt(process.env.REDIS_PORT || '6379', 10),
+  redisUsername: process.env.REDIS_USERNAME || '',
+  redisPassword: process.env.REDIS_PASSWORD || '',
+  redisDb: parseInt(process.env.REDIS_DB || '0', 10),
+  redisUrl: process.env.REDIS_URL || '',
+  redisMandatory: process.env.REDIS_MANDATORY === 'true',
 };

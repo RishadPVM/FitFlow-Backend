@@ -153,13 +153,10 @@ const getMemberDetail = asyncHandler(async (req, res, next) => {
 const updateMemberMembership = asyncHandler(async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { planName, durationInDays } = req.body;
+    const { membershipPlanId, planName, durationInDays, durationInMonths, startDate: reqStartDate, price: reqPrice } = req.body;
 
     if (!id) {
       throw new AppError(400, null, 'User ID is required');
-    }
-    if (!planName || !durationInDays) {
-      throw new AppError(400, null, 'Plan Name and Duration in Days are required');
     }
 
     const user = await prisma.user.findUnique({
@@ -173,32 +170,49 @@ const updateMemberMembership = asyncHandler(async (req, res, next) => {
       throw new AppError(400, null, 'User is not associated with any gym');
     }
 
-    // Try to find the plan by name in this gym
-    let plan = await prisma.membershipPlan.findFirst({
-      where: {
-        gymId: user.gymId,
-        name: { equals: planName, mode: 'insensitive' },
-      },
-    });
+    let plan;
+    if (membershipPlanId) {
+      plan = await prisma.membershipPlan.findUnique({
+        where: { id: membershipPlanId }
+      });
+    }
+
+    if (!plan && planName) {
+      // Try to find the plan by name in this gym
+      plan = await prisma.membershipPlan.findFirst({
+        where: {
+          gymId: user.gymId,
+          name: { equals: planName, mode: 'insensitive' },
+        },
+      });
+    }
 
     // Create plan on the fly if not exists
     if (!plan) {
+      const finalPlanName = planName || 'Custom Plan';
+      const finalDurationMonths = durationInMonths || (durationInDays ? Math.max(1, Math.round(durationInDays / 30)) : 1);
       plan = await prisma.membershipPlan.create({
         data: {
           gymId: user.gymId,
-          name: planName,
-          price: 999.00,
-          durationInMonths: Math.max(1, Math.round(durationInDays / 30)),
+          name: finalPlanName,
+          price: reqPrice || 999.00,
+          durationInMonths: finalDurationMonths,
           features: ['Access to gym equipment', 'Locker access'],
         },
       });
     }
 
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + Number(durationInDays));
+    const startDate = reqStartDate ? new Date(reqStartDate) : new Date();
+    const finalDurationMonths = durationInMonths || plan.durationInMonths;
+    
+    const endDate = new Date(startDate);
+    if (durationInDays) {
+      endDate.setDate(endDate.getDate() + Number(durationInDays));
+    } else {
+      endDate.setMonth(endDate.getMonth() + finalDurationMonths);
+    }
 
-    const durationInMonths = Math.max(1, Math.round(durationInDays / 30));
+    const finalPrice = reqPrice !== undefined ? Number(reqPrice) : (plan.discountedPrice ? Number(plan.discountedPrice) : Number(plan.price));
 
     const result = await prisma.$transaction(async (tx) => {
       // Deactivate current membership
@@ -215,9 +229,9 @@ const updateMemberMembership = asyncHandler(async (req, res, next) => {
           userId: user.id,
           membershipPlanId: plan.id,
           planName: plan.name,
-          price: plan.discountedPrice ? plan.discountedPrice : plan.price,
+          price: finalPrice,
           currency: plan.currency,
-          durationInMonths,
+          durationInMonths: finalDurationMonths,
           startDate,
           endDate,
           isActive: true,
