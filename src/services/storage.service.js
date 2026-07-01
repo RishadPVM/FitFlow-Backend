@@ -1,18 +1,11 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const AppError = require('../utils/app-error');
 const logger = require('../config/logger');
+const s3Client = require('../config/awsConfig');
+const env = require('../config/env');
 
-// Initialize S3 client using environment configurations
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'mock-key',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'mock-secret',
-  },
-});
-
-const BUCKET_NAME = process.env.AWS_S3_BUCKET || 'fitflow-assets';
+const BUCKET_NAME = env.awsBucketName || 'prod-gym-os';
 
 // Strict file limitations
 const ALLOWED_MIME_TYPES = {
@@ -83,22 +76,6 @@ const getPresignedUploadUrl = async (gymId, conversationId, fileName, fileSize, 
       key = `general/${Date.now()}_${cleanFileName}`;
     }
 
-    const isMock = !process.env.AWS_ACCESS_KEY_ID || 
-                   process.env.AWS_ACCESS_KEY_ID === 'mock-key' ||
-                   !process.env.AWS_SECRET_ACCESS_KEY ||
-                   process.env.AWS_SECRET_ACCESS_KEY === 'mock-secret';
-
-    if (isMock) {
-      // Local fallback URLs
-      const uploadUrl = `${requestBaseUrl}/api/v1/chats/upload-local/${key}`;
-      const publicUrl = `${requestBaseUrl}/uploads/${key}`;
-      return {
-        uploadUrl,
-        publicUrl,
-        key
-      };
-    }
-
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
@@ -121,7 +98,71 @@ const getPresignedUploadUrl = async (gymId, conversationId, fileName, fileSize, 
   }
 };
 
+/**
+ * Delete a single file from S3
+ */
+const deleteFile = async (key) => {
+  if (!key) return;
+  try {
+    const command = new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+    await s3Client.send(command);
+    logger.info(`Successfully deleted S3 object with key: ${key}`);
+  } catch (error) {
+    logger.error(`Error deleting S3 object with key ${key}:`, error);
+  }
+};
+
+/**
+ * Batch delete multiple files from S3
+ */
+const deleteFiles = async (keys) => {
+  const validKeys = keys.filter(Boolean);
+  if (validKeys.length === 0) return;
+  
+  try {
+    const command = new DeleteObjectsCommand({
+      Bucket: BUCKET_NAME,
+      Delete: {
+        Objects: validKeys.map(key => ({ Key: key }))
+      }
+    });
+    await s3Client.send(command);
+    logger.info(`Successfully deleted S3 objects: ${validKeys.join(', ')}`);
+  } catch (error) {
+    logger.error('Error batch deleting S3 objects:', error);
+  }
+};
+
+/**
+ * Helper to extract S3 key from S3 URL
+ */
+const extractKeyFromUrl = (url) => {
+  if (!url) return null;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return url;
+  }
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname;
+    if (hostname.includes('.s3.')) {
+      return decodeURIComponent(parsed.pathname.slice(1));
+    }
+    if (hostname.endsWith('.s3.amazonaws.com')) {
+      return decodeURIComponent(parsed.pathname.slice(1));
+    }
+    return decodeURIComponent(parsed.pathname.slice(1));
+  } catch (error) {
+    return url;
+  }
+};
+
 module.exports = {
   getPresignedUploadUrl,
-  validateFile
+  validateFile,
+  deleteFile,
+  deleteFiles,
+  extractKeyFromUrl
 };

@@ -5,6 +5,7 @@ const jwtService = require('./jwt.service');
 const redisService = require('./redis.service');
 const prisma = require('../config/database');
 const logger = require('../config/logger');
+const storageService = require('./storage.service');
 
 let io = null;
 
@@ -124,12 +125,13 @@ const initSocket = (server) => {
               duration: duration || null,
               attachments: attachments && attachments.length > 0 ? {
                 create: attachments.map(att => ({
-                  url: att.url,
-                  fileName: att.fileName,
-                  fileSize: parseInt(att.fileSize),
-                  mimeType: att.mimeType,
-                  duration: att.duration || null,
-                  thumbnailUrl: att.thumbnailUrl || null
+                   url: att.url,
+                   key: att.key || storageService.extractKeyFromUrl(att.url),
+                   fileName: att.fileName,
+                   fileSize: parseInt(att.fileSize),
+                   mimeType: att.mimeType,
+                   duration: att.duration || null,
+                   thumbnailUrl: att.thumbnailUrl || null
                 }))
               } : undefined
             },

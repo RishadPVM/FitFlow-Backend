@@ -35,8 +35,7 @@ app.use('/api/v1/attendance', attendanceRoutes);
 app.use('/api/v1/chats', chatRoutes);
 app.use('/api/v1/notices', noticeRoutes);
 
-const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 // Global Error Handler
 app.use(errorHandler);

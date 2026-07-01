@@ -55,7 +55,13 @@ const updateUser = asyncHandler(async (req, res, next) => {
     if (phone !== undefined) data.phone = (phone === '' || phone === null) ? null : phone;
     if (role !== undefined) data.role = role;
     if (isActive !== undefined) data.isActive = isActive;
-    if (profilePic !== undefined) data.profileImage = profilePic;
+    if (profilePic !== undefined) {
+      data.profileImage = profilePic || null;
+      data.profileImageKey = profilePic ? storageService.extractKeyFromUrl(profilePic) : null;
+      if (user.profileImageKey && user.profileImageKey !== data.profileImageKey) {
+        await storageService.deleteFile(user.profileImageKey);
+      }
+    }
     if (dateOfBirth !== undefined) {
       data.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
     }
@@ -156,12 +162,22 @@ const updateUser = asyncHandler(async (req, res, next) => {
 
 const deleteUser = asyncHandler(async (req, res, next) => {
   try {
-     const { id } = req.params;
-  if (!id) {
-    throw new AppError(400, null, 'User ID is required');
-  }
-  const deleteUser = await prisma.user.delete({ where: { id } });
-  res.status(200).json(new ApiResponse(200, deleteUser, 'User deleted successfully'));
+    const { id } = req.params;
+    if (!id) {
+      throw new AppError(400, null, 'User ID is required');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { profileImageKey: true }
+    });
+
+    if (user && user.profileImageKey) {
+      await storageService.deleteFile(user.profileImageKey);
+    }
+
+    const deleteUser = await prisma.user.delete({ where: { id } });
+    res.status(200).json(new ApiResponse(200, deleteUser, 'User deleted successfully'));
   } catch (error) {
     return next(error);
   }

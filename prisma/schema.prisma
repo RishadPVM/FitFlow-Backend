@@ -45,6 +45,7 @@ model User {
   email        String  @unique
   phone        String? @unique
   profileImage String?
+  profileImageKey String?
   googleId     String? @unique
 
   deviceType    DeviceType
@@ -105,7 +106,9 @@ model Gym {
   is24Hours    Boolean @default(false)
 
   logoUrl       String?
+  logoKey       String?
   coverImageUrl String?
+  coverImageKey String?
 
   currency       String @default("INR")
   timezone       String @default("Asia/Kolkata")
@@ -364,6 +367,7 @@ model Attachment {
   messageId    String
   message      Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
   url          String   // Public/Signed S3 URL
+  key          String?
   fileName     String
   fileSize     Int      // In bytes
   mimeType     String

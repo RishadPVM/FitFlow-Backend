@@ -71,44 +71,78 @@ const updateGym = asyncHandler(async (req, res, next) => {
     if (!id) {
       throw new AppError(400, null, "Gym ID is required");
     }
-    const updateGym = await prisma.gym.update({
+
+    const gym = await prisma.gym.findUnique({
       where: { id },
-      data: {
-        gymName,
-        ownerName,
-        gymAbout,
-        establishedYear,
-        email,
-        phone,
-        whatsappNumber,
-        alternatePhone,
-        website,
-        address,
-        city,
-        district,
-        state,
-        country,
-        postalCode,
-        latitude,
-        longitude,
-        workingHours,
-        is24Hours,
-        logoUrl,
-        coverImageUrl,
-        currency,
-        timezone,
-        maxMembers,
-        instagramUrl,
-        facebookUrl,
-        youtubeUrl,
-        gstNumber,
-        licenseNumber,
-        password,
-      },
+      select: { logoKey: true, coverImageKey: true }
+    });
+    if (!gym) {
+      throw new AppError(404, null, "Gym not found");
+    }
+
+    let logoKey;
+    if (logoUrl !== undefined) {
+      logoKey = logoUrl ? storageService.extractKeyFromUrl(logoUrl) : null;
+      if (gym.logoKey && gym.logoKey !== logoKey) {
+        await storageService.deleteFile(gym.logoKey);
+      }
+    }
+
+    let coverImageKey;
+    if (coverImageUrl !== undefined) {
+      coverImageKey = coverImageUrl ? storageService.extractKeyFromUrl(coverImageUrl) : null;
+      if (gym.coverImageKey && gym.coverImageKey !== coverImageKey) {
+        await storageService.deleteFile(gym.coverImageKey);
+      }
+    }
+
+    const dataToUpdate = {
+      gymName,
+      ownerName,
+      gymAbout,
+      establishedYear,
+      email,
+      phone,
+      whatsappNumber,
+      alternatePhone,
+      website,
+      address,
+      city,
+      district,
+      state,
+      country,
+      postalCode,
+      latitude,
+      longitude,
+      workingHours,
+      is24Hours,
+      currency,
+      timezone,
+      maxMembers,
+      instagramUrl,
+      facebookUrl,
+      youtubeUrl,
+      gstNumber,
+      licenseNumber,
+      password,
+    };
+
+    if (logoUrl !== undefined) {
+      dataToUpdate.logoUrl = logoUrl;
+      dataToUpdate.logoKey = logoKey;
+    }
+    if (coverImageUrl !== undefined) {
+      dataToUpdate.coverImageUrl = coverImageUrl;
+      dataToUpdate.coverImageKey = coverImageKey;
+    }
+
+    const updatedGym = await prisma.gym.update({
+      where: { id },
+      data: dataToUpdate,
     });
     res
       .status(200)
-      .json(new ApiResponse(200, updateGym, "Gym updated successfully"));
+      .json(new ApiResponse(200, updatedGym, "Gym updated successfully"));
   } catch (error) {
     return next(error);
   }
@@ -120,6 +154,54 @@ const deleteGym = asyncHandler(async (req, res, next) => {
     if (!id) {
       throw new AppError(400, null, "Gym ID is required");
     }
+
+    const gym = await prisma.gym.findUnique({
+      where: { id },
+      select: { logoKey: true, coverImageKey: true }
+    });
+
+    if (gym) {
+      if (gym.logoKey) await storageService.deleteFile(gym.logoKey);
+      if (gym.coverImageKey) await storageService.deleteFile(gym.coverImageKey);
+    }
+
+    // Find and delete all message attachments in gym conversations from S3
+    const conversations = await prisma.conversation.findMany({
+      where: { gymId: id },
+      select: {
+        messages: {
+          select: {
+            attachments: {
+              select: {
+                key: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const attachmentKeys = [];
+    if (conversations && conversations.length > 0) {
+      for (const conv of conversations) {
+        if (conv.messages) {
+          for (const msg of conv.messages) {
+            if (msg.attachments) {
+              for (const att of msg.attachments) {
+                if (att.key) {
+                  attachmentKeys.push(att.key);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (attachmentKeys.length > 0) {
+      await storageService.deleteFiles(attachmentKeys);
+    }
+
     const deleteGym = await prisma.gym.delete({ where: { id } });
     res
       .status(200)

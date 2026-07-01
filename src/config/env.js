@@ -20,4 +20,10 @@ module.exports = {
   redisDb: parseInt(process.env.REDIS_DB || '0', 10),
   redisUrl: process.env.REDIS_URL || '',
   redisMandatory: process.env.REDIS_MANDATORY === 'true',
+  awsRegion: process.env.AWS_REGION || 'us-east-1',
+  awsBucketName: process.env.AWS_BUCKET_NAME || '',
+  awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+  awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+  
+  
 };
