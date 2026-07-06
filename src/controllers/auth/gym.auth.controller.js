@@ -301,9 +301,20 @@ const loginGym = asyncHandler(async (req, res, next) => {
     throw new AppError(401, null, 'Invalid password');
   }
 
-  // Generate tokens
-  const accessToken = generateAcessToken({ id: gym.id, role: 'GYM_OWNER' });
-  const refreshToken = generateRefreshToken({ id: gym.id, role: 'GYM_OWNER' });
+  // Create active session
+  const session = await prisma.session.create({
+    data: {
+      userId: gym.id,
+      role: 'GYM_OWNER',
+      deviceName: req.body.deviceName || req.headers['x-device-name'] || 'Web Console',
+      deviceType: req.body.deviceType || req.headers['x-device-type'] || 'WEB',
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+    },
+  });
+
+  // Generate tokens with sessionId
+  const accessToken = generateAcessToken({ id: gym.id, role: 'GYM_OWNER' }, session.id);
+  const refreshToken = generateRefreshToken({ id: gym.id, role: 'GYM_OWNER' }, session.id);
 
   // Remove password before sending response
   const { password: _, ...gymWithoutPassword } = gym;

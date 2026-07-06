@@ -441,3 +441,16 @@ model AuditLog {
 
   @@index([adminId])
 }
+
+model Session {
+  id         String   @id @default(uuid())
+  userId     String   // Maps to Gym.id or User.id
+  role       String   // 'GYM_OWNER' or 'USER'
+  deviceName String   @default("Unknown Device")
+  deviceType String   @default("UNKNOWN") // 'ANDROID', 'IOS', 'WEB', 'DESKTOP'
+  ipAddress  String?
+  lastActive DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}

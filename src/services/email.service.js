@@ -16,7 +16,14 @@ const transporter = nodemailer.createTransport({
 
 const sendOtpEmail = async (toEmail, otp, type = 'forgot-password') => {
   const isSignup = type === 'signup';
-  const subject = isSignup ? "Verify Your Gym Admin Email Address" : "Reset Your Gym Admin Password";
+  const isEmailChange = type === 'email-change';
+
+  let subject = "Reset Your Gym Admin Password";
+  if (isSignup) {
+    subject = "Verify Your Gym Admin Email Address";
+  } else if (isEmailChange) {
+    subject = "Verify Your Email Change Request";
+  }
 
   if (!env.smtpUser || !env.smtpPass) {
     console.log(`========================================`);
@@ -34,7 +41,9 @@ const sendOtpEmail = async (toEmail, otp, type = 'forgot-password') => {
     subject: subject,
     text: isSignup 
       ? `Welcome to FitFlow! Your verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not initiate this sign-up request, please ignore this email.`
-      : `Your verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not request this password reset, please ignore this email.`,
+      : isEmailChange
+        ? `Your verification code to change your email address is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not request this email change, please ignore this email.`
+        : `Your verification code is: ${otp}\n\nThis code will expire in 5 minutes.\n\nIf you did not request this password reset, please ignore this email.`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -124,11 +133,13 @@ const sendOtpEmail = async (toEmail, otp, type = 'forgot-password') => {
         <div class="email-wrapper">
           <div class="card">
             <div class="logo">FitFlow</div>
-            <h1 class="title">${isSignup ? "Verify Your Gym Admin Email Address" : "Reset Your Gym Admin Password"}</h1>
+            <h1 class="title">${isSignup ? "Verify Your Gym Admin Email Address" : isEmailChange ? "Verify Your Email Change Request" : "Reset Your Gym Admin Password"}</h1>
             <p class="subtitle">
               ${isSignup 
                 ? "Welcome to FitFlow! Your email verification code is listed below. Use this code to verify your email address and complete your Gym account registration." 
-                : "Your verification code is listed below. Use this code to complete your password reset request."}
+                : isEmailChange
+                  ? "Your verification code to change your email address is listed below. Use this code to verify and complete your email change request."
+                  : "Your verification code is listed below. Use this code to complete your password reset request."}
             </p>
             
             <div class="otp-container">
@@ -142,7 +153,9 @@ const sendOtpEmail = async (toEmail, otp, type = 'forgot-password') => {
             <p class="footer">
               ${isSignup 
                 ? "If you did not initiate this sign-up request, please ignore this email. No account will be created without this verification." 
-                : "If you did not request this password reset, please ignore this email. Your password will remain unchanged."}
+                : isEmailChange
+                  ? "If you did not initiate this email change request, please ignore this email. Your email address will remain unchanged."
+                  : "If you did not request this password reset, please ignore this email. Your password will remain unchanged."}
             </p>
           </div>
         </div>

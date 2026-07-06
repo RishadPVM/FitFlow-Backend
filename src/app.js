@@ -7,6 +7,7 @@ const rateLimiter = require("./middleware/rate-limit.middleware");
 
 // routes
 const authRoutes = require("./routes/auth.routes");
+const securityRoutes = require("./routes/security.routes");
 const userRoutes = require("./routes/user.routes");
 const gymRoutes = require("./routes/gym.routes");
 const membershipPlanRoutes = require("./routes/membership-plan.routes");
@@ -26,6 +27,7 @@ app.use(rateLimiter);
 // Routes
 // app.use('/api/v1', routes);
 
+app.use("/api/v1/auth/security", securityRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
 app.use("/api/v1/gyms", gymRoutes);

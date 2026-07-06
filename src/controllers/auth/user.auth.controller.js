@@ -36,51 +36,45 @@ const signWithGoogle = asyncHandler(async (req, res, next) => {
     }
   });
 
-  if (!existingUser) {
-    const newUser = await prisma.user.create({
-      data: {
-        email,
-        name,
-        profileImage: picture,
-        deviceType: deviceType,
-        googleId,
-      },
-      include : {
+  const user = existingUser || await prisma.user.create({
+    data: {
+      email,
+      name,
+      profileImage: picture,
+      deviceType: deviceType,
+      googleId,
+    },
+    include : {
       gym : true,
       currentMembershipPlan: true,
     }
-    });
+  });
 
-    const accessToken = generateAcessToken(newUser);
-    const refreshToken = generateRefreshToken(newUser);
+  // Create active session
+  const session = await prisma.session.create({
+    data: {
+      userId: user.id,
+      role: 'USER',
+      deviceName: req.body.deviceName || req.headers['x-device-name'] || (deviceType === 'ANDROID' ? 'Android Device' : 'iOS Device'),
+      deviceType: deviceType,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+    },
+  });
 
-    return res.status(201).json(
-      new ApiResponse(
-        201,
-        {
-          user: newUser,
-          accessToken: accessToken,
-          refreshToken: refreshToken,
-        },
-        "User registered successfully",
-      ),
-    );
-  } else {
-    const accessToken = generateAcessToken(existingUser);
-    const refreshToken = generateRefreshToken(existingUser);
+  const accessToken = generateAcessToken(user, session.id);
+  const refreshToken = generateRefreshToken(user, session.id);
 
-    return res.status(200).json(
-      new ApiResponse(
-        200,
-        {
-          user: existingUser,
-          accessToken: accessToken,
-          refreshToken: refreshToken,
-        },
-        "User logged in successfully",
-      ),
-    );
-  }
+  return res.status(existingUser ? 200 : 201).json(
+    new ApiResponse(
+      existingUser ? 200 : 201,
+      {
+        user,
+        accessToken,
+        refreshToken,
+      },
+      existingUser ? "User logged in successfully" : "User registered successfully",
+    ),
+  );
   } catch (error) {
     return next(error);
   }
