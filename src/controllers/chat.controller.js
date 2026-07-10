@@ -4,6 +4,7 @@ const ApiResponse = require('../utils/api-response');
 const AppError = require('../utils/app-error');
 const storageService = require('../services/storage.service');
 const redisService = require('../services/redis.service');
+const socketService = require('../services/socket.service');
 
 /**
  * Fetch active chat list for authenticated client (User or Gym Admin)
@@ -27,7 +28,7 @@ const getConversations = asyncHandler(async (req, res, next) => {
           include: {
             messages: {
               orderBy: { timestamp: 'desc' },
-              take: 1,
+              take: 10,
               include: { attachments: true }
             },
             participants: {
@@ -52,7 +53,7 @@ const getConversations = asyncHandler(async (req, res, next) => {
 
     const conversationsList = await Promise.all(participants.map(async (p) => {
       const conv = p.conversation;
-      const lastMsg = conv.messages[0] || null;
+      const lastMsg = conv.messages.find(msg => !(p.deletedMessageIds || []).includes(msg.id)) || null;
 
       let lastMsgSenderName = null;
       if (lastMsg) {
@@ -123,7 +124,9 @@ const getConversations = asyncHandler(async (req, res, next) => {
           timestamp: lastMsg.timestamp,
           senderId: lastMsg.senderId,
           senderType: lastMsg.senderType,
-          senderName: lastMsgSenderName
+          senderName: lastMsgSenderName,
+          isDeleted: lastMsg.isDeleted,
+          deletedBy: lastMsg.deletedBy
         } : null,
         contact
       };
@@ -240,15 +243,10 @@ const createConversation = asyncHandler(async (req, res, next) => {
         where: {
           type: 'PRIVATE',
           gymId: targetGymId,
-          participants: {
-            some: { userId: targetMemberId }
-          },
-          // Ensure it's not a User-to-User conversation
-          NOT: {
-            participants: {
-              some: { gymId: null, userId: { not: targetMemberId } }
-            }
-          }
+          AND: [
+            { participants: { some: { gymId: targetGymId } } },
+            { participants: { some: { userId: targetMemberId } } }
+          ]
         },
         include: {
           participants: {
@@ -322,9 +320,20 @@ const getMessages = asyncHandler(async (req, res, next) => {
       throw new AppError(403, null, 'Unauthorized access to conversation history');
     }
 
+    // Reset unread count for the caller
+    await prisma.participant.update({
+      where: { id: participant.id },
+      data: { unreadCount: 0 }
+    });
+
     // Build paginated query
     const query = {
-      where: { conversationId },
+      where: {
+        conversationId,
+        NOT: {
+          id: { in: participant.deletedMessageIds || [] }
+        }
+      },
       orderBy: { timestamp: 'desc' },
       take: parsedLimit + 1,
       include: { attachments: true }
@@ -362,9 +371,23 @@ const getMessages = asyncHandler(async (req, res, next) => {
     users.forEach(u => senderMap.set(u.id, u.name));
     gyms.forEach(g => senderMap.set(g.id, g.gymName));
 
-    const messagesWithSender = messages.map(msg => ({
-      ...msg,
-      senderName: senderMap.get(msg.senderId) || 'Unknown'
+    const messagesWithSender = await Promise.all(messages.map(async (msg) => {
+      // Sign attachment URLs if they exist
+      if (msg.attachments && msg.attachments.length > 0) {
+        msg.attachments = await Promise.all(msg.attachments.map(async (att) => {
+          if (att.key) {
+            const signedUrl = await storageService.getSignedDownloadUrl(att.key);
+            if (signedUrl) {
+              att.url = signedUrl;
+            }
+          }
+          return att;
+        }));
+      }
+      return {
+        ...msg,
+        senderName: senderMap.get(msg.senderId) || 'Unknown'
+      };
     }));
 
     // Sort to chronological order for client consumption
@@ -429,9 +452,135 @@ const getUploadTicket = asyncHandler(async (req, res, next) => {
   }
 });
 
+/**
+ * Delete a message (delete for me or delete for everyone)
+ */
+const deleteMessage = asyncHandler(async (req, res, next) => {
+  try {
+    const { conversationId, messageId } = req.params;
+    const deleteType = req.body.deleteType || req.query.deleteType; // 'me' or 'everyone'
+    const clientId = req.user.userId;
+    const isGym = req.user.role === 'GYM_OWNER';
+
+    if (!deleteType || !['me', 'everyone'].includes(deleteType)) {
+      throw new AppError(400, null, 'deleteType must be either "me" or "everyone"');
+    }
+
+    // 1. Verify caller room authorization
+    const participant = await prisma.participant.findFirst({
+      where: {
+        conversationId,
+        OR: isGym ? [{ gymId: clientId }] : [{ userId: clientId }]
+      }
+    });
+
+    if (!participant) {
+      throw new AppError(403, null, 'Unauthorized access to this conversation');
+    }
+
+    // 2. Verify message exists
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: { attachments: true }
+    });
+
+    if (!message || message.conversationId !== conversationId) {
+      throw new AppError(404, null, 'Message not found');
+    }
+
+    if (message.isDeleted) {
+      return res.status(200).json(
+        new ApiResponse(200, null, 'Message already deleted')
+      );
+    }
+
+    if (deleteType === 'everyone') {
+      // 3. Authorization check for everyone deletion:
+      // Must be the sender of the message OR the Gym Owner in their gym's conversation.
+      const isSender = message.senderId === clientId;
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId }
+      });
+      const isGymAdmin = isGym && conversation && conversation.gymId === clientId;
+
+      if (!isSender && !isGymAdmin) {
+        throw new AppError(403, null, 'Unauthorized to delete this message for everyone');
+      }
+
+      // 4. Delete attachments from S3 if they exist
+      if (message.attachments && message.attachments.length > 0) {
+        const keys = message.attachments.map(att => att.key).filter(Boolean);
+        if (keys.length > 0) {
+          await storageService.deleteFiles(keys);
+        }
+      }
+
+      // 5. Soft delete message (Delete attachments from DB and set Message status)
+      await prisma.$transaction([
+        prisma.attachment.deleteMany({
+          where: { messageId }
+        }),
+        prisma.message.update({
+          where: { id: messageId },
+          data: {
+            isDeleted: true,
+            deletedBy: clientId,
+            text: null,
+            type: 'TEXT',
+            duration: null
+          }
+        })
+      ]);
+
+      // 6. Broadcast delete notification via Socket.IO
+      try {
+        const io = socketService.getIO();
+        const roomParticipants = await prisma.participant.findMany({
+          where: { conversationId }
+        });
+        for (const p of roomParticipants) {
+          const personalRoom = p.userId ? `user:${p.userId}` : `gym:${p.gymId}`;
+          io.to(personalRoom).emit('message_deleted', {
+            conversationId,
+            messageId,
+            deleteType: 'everyone',
+            deletedBy: clientId
+          });
+        }
+      } catch (ioErr) {
+        logger.error('Error broadcasting message deletion:', ioErr);
+      }
+
+      return res.status(200).json(
+        new ApiResponse(200, null, 'Message deleted for everyone successfully')
+      );
+    } else {
+      // deleteType === 'me'
+      // 3. Append to deletedMessageIds for this participant
+      if (!participant.deletedMessageIds.includes(messageId)) {
+        await prisma.participant.update({
+          where: { id: participant.id },
+          data: {
+            deletedMessageIds: {
+              push: messageId
+            }
+          }
+        });
+      }
+
+      return res.status(200).json(
+        new ApiResponse(200, null, 'Message deleted for me successfully')
+      );
+    }
+  } catch (error) {
+    return next(error);
+  }
+});
+
 module.exports = {
   getConversations,
   createConversation,
   getMessages,
-  getUploadTicket
+  getUploadTicket,
+  deleteMessage
 };

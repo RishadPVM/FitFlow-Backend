@@ -13,6 +13,9 @@ router.route('/')
 router.route('/:id/messages')
   .get(controller.getMessages);
 
+router.route('/:conversationId/messages/:messageId')
+  .delete(controller.deleteMessage);
+
 router.route('/upload-ticket')
   .post(controller.getUploadTicket);
 

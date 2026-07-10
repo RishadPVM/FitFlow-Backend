@@ -330,6 +330,7 @@ model Participant {
   lastDeliveredMessage   Message?     @relation("DeliveryReceipts", fields: [lastDeliveredMessageId], references: [id])
   
   unreadCount            Int          @default(0)
+  deletedMessageIds      String[]     @default([])
 
   @@unique([conversationId, userId])
   @@unique([conversationId, gymId])
@@ -356,6 +357,9 @@ model Message {
   // Receipts relations
   readByParticipants      Participant[] @relation("ReadReceipts")
   deliveredToParticipants Participant[] @relation("DeliveryReceipts")
+
+  isDeleted      Boolean       @default(false)
+  deletedBy      String?
 
   @@index([conversationId])
   @@index([createdAt])

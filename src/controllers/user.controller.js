@@ -186,6 +186,7 @@ const syncGymGroupMembership = async (tx, userId, oldGymId, newGymId) => {
   if (oldGymId === newGymId) return;
 
   if (oldGymId) {
+    // 1. Remove user from GROUP
     const oldGroup = await tx.conversation.findFirst({
       where: { gymId: oldGymId, type: 'GROUP', isDefaultGroup: true }
     });
@@ -194,9 +195,31 @@ const syncGymGroupMembership = async (tx, userId, oldGymId, newGymId) => {
         where: { conversationId: oldGroup.id, userId }
       });
     }
+
+    // 2. Delete the private conversation between user and old gym owner
+    const oldPrivateConv = await tx.conversation.findFirst({
+      where: {
+        gymId: oldGymId,
+        type: 'PRIVATE',
+        participants: {
+          some: { userId }
+        },
+        NOT: {
+          participants: {
+            some: { gymId: null, userId: { not: userId } }
+          }
+        }
+      }
+    });
+    if (oldPrivateConv) {
+      await tx.conversation.delete({
+        where: { id: oldPrivateConv.id }
+      });
+    }
   }
 
   if (newGymId) {
+    // 1. Find or create the Gym Community Group
     let newGroup = await tx.conversation.findFirst({
       where: { gymId: newGymId, type: 'GROUP', isDefaultGroup: true }
     });
@@ -207,15 +230,27 @@ const syncGymGroupMembership = async (tx, userId, oldGymId, newGymId) => {
           gymId: newGymId,
           type: 'GROUP',
           isDefaultGroup: true,
-          title: gym ? `${gym.gymName} Group` : 'LEO Fitness Group',
+          title: gym ? `${gym.gymName} Group` : 'Gym Group',
           participants: {
             create: [
-              { gymId: newGymId }
+              { gymId: newGymId } // Gym Owner
             ]
           }
         }
       });
+    } else {
+      // Ensure Gym Owner is a participant of the group (if they somehow aren't)
+      const ownerParticipant = await tx.participant.findFirst({
+        where: { conversationId: newGroup.id, gymId: newGymId }
+      });
+      if (!ownerParticipant) {
+        await tx.participant.create({
+          data: { conversationId: newGroup.id, gymId: newGymId }
+        });
+      }
     }
+
+    // Add user as participant to the Group
     await tx.participant.upsert({
       where: {
         conversationId_userId: {
@@ -229,6 +264,52 @@ const syncGymGroupMembership = async (tx, userId, oldGymId, newGymId) => {
         userId
       }
     });
+
+    // 2. Find or create the Private Chat between Gym Owner and Joined Member
+    let privateConv = await tx.conversation.findFirst({
+      where: {
+        gymId: newGymId,
+        type: 'PRIVATE',
+        AND: [
+          { participants: { some: { gymId: newGymId } } },
+          { participants: { some: { userId } } }
+        ]
+      }
+    });
+
+    if (!privateConv) {
+      privateConv = await tx.conversation.create({
+        data: {
+          type: 'PRIVATE',
+          gymId: newGymId,
+          participants: {
+            create: [
+              { gymId: newGymId }, // Gym Owner
+              { userId } // Member
+            ]
+          }
+        }
+      });
+    } else {
+      // Ensure both Gym Owner and Joined Member are participants
+      const ownerPart = await tx.participant.findFirst({
+        where: { conversationId: privateConv.id, gymId: newGymId }
+      });
+      if (!ownerPart) {
+        await tx.participant.create({
+          data: { conversationId: privateConv.id, gymId: newGymId }
+        });
+      }
+
+      const memberPart = await tx.participant.findFirst({
+        where: { conversationId: privateConv.id, userId }
+      });
+      if (!memberPart) {
+        await tx.participant.create({
+          data: { conversationId: privateConv.id, userId }
+        });
+      }
+    }
   }
 };
 

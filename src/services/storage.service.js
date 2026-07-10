@@ -1,4 +1,4 @@
-const { PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const AppError = require('../utils/app-error');
 const logger = require('../config/logger');
@@ -84,7 +84,13 @@ const getPresignedUploadUrl = async (gymId, conversationId, fileName, fileSize, 
 
     // Signed URL expires in 15 minutes
     const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 900 });
-    const publicUrl = `https://${BUCKET_NAME}.s3.amazonaws.com/${key}`;
+    
+    // Generate signed download URL for direct access (valid for 1 hour)
+    const getCommand = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+    const publicUrl = await getSignedUrl(s3Client, getCommand, { expiresIn: 3600 });
 
     return {
       uploadUrl,
@@ -159,10 +165,26 @@ const extractKeyFromUrl = (url) => {
   }
 };
 
+const getSignedDownloadUrl = async (key) => {
+  if (!key) return null;
+  try {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    });
+    // Signed read URL expires in 1 hour
+    return await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+  } catch (error) {
+    logger.error('Error generating signed GET URL:', error);
+    return null;
+  }
+};
+
 module.exports = {
   getPresignedUploadUrl,
   validateFile,
   deleteFile,
   deleteFiles,
-  extractKeyFromUrl
+  extractKeyFromUrl,
+  getSignedDownloadUrl
 };
