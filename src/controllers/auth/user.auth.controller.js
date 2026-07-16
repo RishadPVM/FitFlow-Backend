@@ -3,6 +3,7 @@ const ApiResponse = require("../../utils/api-response");
 const AppError = require("../../utils/app-error");
 const prisma = require("../../config/database");
 const { verifyGoogleToken } = require("../../services/google-auth.service");
+const { getIpLocation } = require("../../utils/geolocation");
 const {
   generateAcessToken,
   generateRefreshToken,
@@ -51,13 +52,17 @@ const signWithGoogle = asyncHandler(async (req, res, next) => {
   });
 
   // Create active session
+  const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const location = await getIpLocation(ipAddress);
+
   const session = await prisma.session.create({
     data: {
       userId: user.id,
       role: 'USER',
       deviceName: req.body.deviceName || req.headers['x-device-name'] || (deviceType === 'ANDROID' ? 'Android Device' : 'iOS Device'),
       deviceType: deviceType,
-      ipAddress: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+      ipAddress,
+      location,
     },
   });
 

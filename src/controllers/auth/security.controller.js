@@ -221,6 +221,7 @@ const getSessions = asyncHandler(async (req, res) => {
     deviceName: session.deviceName,
     deviceType: session.deviceType,
     ipAddress: session.ipAddress,
+    location: session.location || "Unknown Location",
     lastActive: session.lastActive,
     createdAt: session.createdAt,
     isCurrent: session.id === sessionId,

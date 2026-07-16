@@ -7,6 +7,7 @@ const { generateAcessToken, generateRefreshToken } = require("../../services/jwt
 const jwt = require("jsonwebtoken");
 const env = require("../../config/env");
 const { sendOtpEmail } = require("../../services/email.service");
+const { getIpLocation } = require("../../utils/geolocation");
 
 
 
@@ -302,13 +303,17 @@ const loginGym = asyncHandler(async (req, res, next) => {
   }
 
   // Create active session
+  const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const location = await getIpLocation(ipAddress);
+
   const session = await prisma.session.create({
     data: {
       userId: gym.id,
       role: 'GYM_OWNER',
       deviceName: req.body.deviceName || req.headers['x-device-name'] || 'Web Console',
       deviceType: req.body.deviceType || req.headers['x-device-type'] || 'WEB',
-      ipAddress: req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+      ipAddress,
+      location,
     },
   });
 

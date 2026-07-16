@@ -453,6 +453,7 @@ model Session {
   deviceName String   @default("Unknown Device")
   deviceType String   @default("UNKNOWN") // 'ANDROID', 'IOS', 'WEB', 'DESKTOP'
   ipAddress  String?
+  location   String?
   lastActive DateTime @default(now())
   createdAt  DateTime @default(now())
 
