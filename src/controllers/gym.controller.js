@@ -6,10 +6,18 @@ const storageService = require("../services/storage.service");
 
 const getAllGyms = asyncHandler(async (req, res, next) => {
   try {
-    const getAllGyms = await prisma.gym.findMany();
+    const gyms = await prisma.gym.findMany({
+      where: {
+        isActive: true,
+        status: "ACTIVE",
+      },
+      orderBy: {
+        gymName: "asc",
+      },
+    });
     res
       .status(200)
-      .json(new ApiResponse(200, getAllGyms, "Gyms retrieved successfully"));
+      .json(new ApiResponse(200, gyms, "Gyms retrieved successfully"));
   } catch (error) {
     return next(error);
   }
@@ -223,7 +231,7 @@ const getGymMembers = asyncHandler(async (req, res, next) => {
         currentMembershipPlan: true,
         gym: true,
       },
-      orderBy: [{ createdAt: "asc" }],
+      orderBy: [{ name: "asc" }],
     });
     res
       .status(200)

@@ -140,6 +140,72 @@ const getConversations = asyncHandler(async (req, res, next) => {
   }
 });
 
+const formatSingleConversation = async (conversation, clientId, isGym) => {
+  const otherParticipant = conversation.participants.find(cp => {
+    if (isGym) {
+      return cp.userId !== null;
+    } else {
+      if (cp.gymId !== null) return true;
+      return cp.userId !== null && cp.userId !== clientId;
+    }
+  });
+
+  let contact = null;
+  if (otherParticipant) {
+    const profile = otherParticipant.user || otherParticipant.gym;
+    if (profile) {
+      const isOnline = (await redisService.getPresenceStatus(profile.id)) || profile.isOnline || false;
+      contact = {
+        id: profile.id,
+        name: otherParticipant.user ? profile.name : profile.gymName,
+        profileImage: otherParticipant.user ? profile.profileImage : profile.logoUrl,
+        isOnline,
+        lastSeen: profile.lastSeen,
+        role: otherParticipant.user ? 'USER' : 'GYM'
+      };
+    }
+  }
+
+  const lastMsg = conversation.messages && conversation.messages.length > 0 ? conversation.messages[0] : null;
+  let lastMsgSenderName = null;
+  if (lastMsg) {
+    if (lastMsg.senderType === 'USER') {
+      const user = await prisma.user.findUnique({
+        where: { id: lastMsg.senderId },
+        select: { name: true }
+      });
+      lastMsgSenderName = user ? user.name : 'Unknown';
+    } else if (lastMsg.senderType === 'GYM') {
+      const gym = await prisma.gym.findUnique({
+        where: { id: lastMsg.senderId },
+        select: { gymName: true }
+      });
+      lastMsgSenderName = gym ? gym.gymName : 'Unknown';
+    }
+  }
+
+  return {
+    id: conversation.id,
+    type: conversation.type,
+    isDefaultGroup: conversation.isDefaultGroup,
+    title: conversation.title,
+    unreadCount: 0,
+    lastMessage: lastMsg ? {
+      id: lastMsg.id,
+      text: lastMsg.text,
+      type: lastMsg.type,
+      createdAt: lastMsg.createdAt,
+      timestamp: lastMsg.timestamp,
+      senderId: lastMsg.senderId,
+      senderType: lastMsg.senderType,
+      senderName: lastMsgSenderName,
+      isDeleted: lastMsg.isDeleted,
+      deletedBy: lastMsg.deletedBy
+    } : null,
+    contact
+  };
+};
+
 /**
  * Admin creates new private chat with a gym member, or User starts chat with Gym / User
  */
@@ -205,13 +271,6 @@ const createConversation = asyncHandler(async (req, res, next) => {
         if (!gym) {
           throw new AppError(404, null, 'Gym not found');
         }
-        // Verify user belongs to this gym
-        const me = await prisma.user.findUnique({
-          where: { id: req.user.userId }
-        });
-        if (me.gymId !== gymId) {
-          throw new AppError(403, null, 'You can only start a chat with your registered gym');
-        }
         targetGymId = gymId;
         targetMemberId = req.user.userId;
       }
@@ -235,6 +294,11 @@ const createConversation = asyncHandler(async (req, res, next) => {
               user: { select: { id: true, name: true, profileImage: true } },
               gym: { select: { id: true, gymName: true, logoUrl: true } }
             }
+          },
+          messages: {
+            orderBy: { timestamp: 'desc' },
+            take: 1,
+            include: { attachments: true }
           }
         }
       });
@@ -254,14 +318,20 @@ const createConversation = asyncHandler(async (req, res, next) => {
               user: { select: { id: true, name: true, profileImage: true } },
               gym: { select: { id: true, gymName: true, logoUrl: true } }
             }
+          },
+          messages: {
+            orderBy: { timestamp: 'desc' },
+            take: 1,
+            include: { attachments: true }
           }
         }
       });
     }
 
     if (conversation) {
+      const formatted = await formatSingleConversation(conversation, req.user.userId, req.user.role === 'GYM_OWNER');
       return res.status(200).json(
-        new ApiResponse(200, conversation, 'Conversation already exists')
+        new ApiResponse(200, formatted, 'Conversation already exists')
       );
     }
 
@@ -288,8 +358,9 @@ const createConversation = asyncHandler(async (req, res, next) => {
       }
     });
 
+    const formatted = await formatSingleConversation(conversation, req.user.userId, req.user.role === 'GYM_OWNER');
     return res.status(201).json(
-      new ApiResponse(201, conversation, 'Conversation initiated successfully')
+      new ApiResponse(201, formatted, 'Conversation initiated successfully')
     );
   } catch (error) {
     return next(error);
