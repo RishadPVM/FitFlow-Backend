@@ -746,6 +746,38 @@ const logTarget = asyncHandler(async (req, res, next) => {
   }
 });
 
+const updateFcmToken = asyncHandler(async (req, res, next) => {
+  try {
+    const { userId, gymId, fcmToken } = req.body;
+    if (!fcmToken) {
+      throw new AppError(400, null, 'FCM token is required');
+    }
+
+    if (userId) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { fcmToken }
+      });
+    } else if (gymId) {
+      await prisma.gym.update({
+        where: { id: gymId },
+        data: { fcmToken }
+      });
+    } else if (req.user?.id) {
+      await prisma.user.update({
+        where: { id: req.user.id },
+        data: { fcmToken }
+      });
+    } else {
+      throw new AppError(400, null, 'User ID or Gym ID is required');
+    }
+
+    res.status(200).json(new ApiResponse(200, { fcmToken }, 'FCM token updated successfully'));
+  } catch (error) {
+    return next(error);
+  }
+});
+
 module.exports = {
   getUsers,
   getUser,
@@ -758,5 +790,6 @@ module.exports = {
   getWeightLogs,
   logWeight,
   getTargetLogs,
-  logTarget
+  logTarget,
+  updateFcmToken
 };

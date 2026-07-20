@@ -58,6 +58,7 @@ model User {
   updatedAt     DateTime    @updatedAt
   gender        Gender?
   height        Float?
+  fcmToken      String?
 
   currentMembershipPlan   UserMembershipPlans? @relation("CurrentMembership", fields: [currentMembershipPlanId], references: [id])
   currentMembershipPlanId String?
@@ -92,6 +93,7 @@ model Gym {
   whatsappNumber String?
   alternatePhone String?
   website        String?
+  fcmToken       String?
 
   address    String
   city       String

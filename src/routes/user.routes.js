@@ -20,6 +20,9 @@ router.route('/members/:id/attendance')
 router.route('/members/:id/history')
   .get(memberController.getMemberHistory);
 
+router.route('/fcm-token')
+  .post(controller.updateFcmToken);
+
 router.route('/')
   .get(controller.getUsers);
 
