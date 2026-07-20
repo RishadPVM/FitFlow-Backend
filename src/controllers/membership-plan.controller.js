@@ -15,7 +15,8 @@ const createMembershipPlan = asyncHandler(async (req, res) => {
     price,
     discountedPrice,
     currency = 'INR',
-    durationInMonths,
+    durationInMonths = 0,
+    durationInDays = 0,
     features = [],
     isActive = true,
     isPopular = false,
@@ -25,7 +26,7 @@ const createMembershipPlan = asyncHandler(async (req, res) => {
   logger.info(`Creating membership plan for gym ${gymId} with name ${name}`);
 
   // Validation
-  if (!gymId || !name || price == null || durationInMonths == null) {
+  if (!gymId || !name || price == null || (durationInMonths == null && durationInDays == null)) {
     throw new AppError(
       400,
       null,
@@ -41,11 +42,14 @@ const createMembershipPlan = asyncHandler(async (req, res) => {
     throw new AppError(400, null, 'Price must be greater than 0');
   }
 
-  if (Number(durationInMonths) <= 0) {
+  const monthsNum = Number(durationInMonths || 0);
+  const daysNum = Number(durationInDays || 0);
+
+  if (monthsNum <= 0 && daysNum <= 0) {
     throw new AppError(
       400,
       null,
-      'Duration in months must be greater than 0'
+      'Duration must be greater than 0'
     );
   }
 
@@ -98,7 +102,8 @@ const createMembershipPlan = asyncHandler(async (req, res) => {
           ? discountedPrice.toString()
           : null,
       currency,
-      durationInMonths: Number(durationInMonths),
+      durationInMonths: monthsNum,
+      durationInDays: daysNum,
       features,
       isActive,
       isPopular,
@@ -143,6 +148,7 @@ const updateMembershipPlan = asyncHandler(async (req, res) => {
     discountedPrice,
     currency,
     durationInMonths,
+    durationInDays,
     features,
     isActive,
     isPopular,
@@ -157,14 +163,14 @@ const updateMembershipPlan = asyncHandler(async (req, res) => {
     throw new AppError(400, null, 'Price must be greater than 0');
   }
 
-  if (
-    durationInMonths !== undefined &&
-    Number(durationInMonths) <= 0
-  ) {
+  const newMonths = durationInMonths !== undefined ? Number(durationInMonths) : existingPlan.durationInMonths;
+  const newDays = durationInDays !== undefined ? Number(durationInDays) : existingPlan.durationInDays;
+
+  if (newMonths <= 0 && newDays <= 0) {
     throw new AppError(
       400,
       null,
-      'Duration in months must be greater than 0'
+      'Duration must be greater than 0'
     );
   }
 
@@ -231,6 +237,9 @@ const updateMembershipPlan = asyncHandler(async (req, res) => {
   if (durationInMonths !== undefined)
     updateData.durationInMonths =
       Number(durationInMonths);
+  if (durationInDays !== undefined)
+    updateData.durationInDays =
+      Number(durationInDays);
   if (features !== undefined)
     updateData.features = features;
   if (isActive !== undefined)

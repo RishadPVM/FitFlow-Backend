@@ -92,7 +92,11 @@ const updateUser = asyncHandler(async (req, res, next) => {
 
       const startDate = new Date();
       const endDate = new Date();
-      endDate.setMonth(endDate.getMonth() + plan.durationInMonths);
+      if (plan.durationInDays && plan.durationInDays > 0) {
+        endDate.setDate(endDate.getDate() + plan.durationInDays);
+      } else {
+        endDate.setMonth(endDate.getMonth() + (plan.durationInMonths > 0 ? plan.durationInMonths : 1));
+      }
 
       updatedUser = await prisma.$transaction(async (tx) => {
         // Deactivate old current membership plan if it exists
@@ -112,6 +116,7 @@ const updateUser = asyncHandler(async (req, res, next) => {
             price: plan.discountedPrice ? plan.discountedPrice : plan.price,
             currency: plan.currency,
             durationInMonths: plan.durationInMonths,
+            durationInDays: plan.durationInDays || 0,
             startDate,
             endDate,
             isActive: true,
@@ -393,9 +398,13 @@ const joinGymAndPlan = asyncHandler(async (req, res, next) => {
     const startDate = new Date();
 
     const endDate = new Date();
-    endDate.setMonth(
-      endDate.getMonth() + selectedPlan.durationInMonths
-    );
+    if (selectedPlan.durationInDays && selectedPlan.durationInDays > 0) {
+      endDate.setDate(endDate.getDate() + selectedPlan.durationInDays);
+    } else {
+      endDate.setMonth(
+        endDate.getMonth() + (selectedPlan.durationInMonths > 0 ? selectedPlan.durationInMonths : 1)
+      );
+    }
 
     // TRANSACTION
     const result = await prisma.$transaction(async (tx) => {
@@ -414,6 +423,8 @@ const joinGymAndPlan = asyncHandler(async (req, res, next) => {
             currency: selectedPlan.currency,
             durationInMonths:
               selectedPlan.durationInMonths,
+            durationInDays:
+              selectedPlan.durationInDays || 0,
 
             startDate,
             endDate,

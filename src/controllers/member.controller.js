@@ -203,13 +203,14 @@ const updateMemberMembership = asyncHandler(async (req, res, next) => {
     }
 
     const startDate = reqStartDate ? new Date(reqStartDate) : new Date();
-    const finalDurationMonths = durationInMonths || plan.durationInMonths;
-    
+    const finalDurationMonths = durationInMonths !== undefined ? Number(durationInMonths) : (plan ? plan.durationInMonths : 0);
+    const finalDurationDays = durationInDays !== undefined ? Number(durationInDays) : (plan ? plan.durationInDays : 0);
+
     const endDate = new Date(startDate);
-    if (durationInDays) {
-      endDate.setDate(endDate.getDate() + Number(durationInDays));
+    if (finalDurationDays > 0) {
+      endDate.setDate(endDate.getDate() + finalDurationDays);
     } else {
-      endDate.setMonth(endDate.getMonth() + finalDurationMonths);
+      endDate.setMonth(endDate.getMonth() + (finalDurationMonths > 0 ? finalDurationMonths : 1));
     }
 
     const finalPrice = reqPrice !== undefined ? Number(reqPrice) : (plan.discountedPrice ? Number(plan.discountedPrice) : Number(plan.price));
@@ -232,6 +233,7 @@ const updateMemberMembership = asyncHandler(async (req, res, next) => {
           price: finalPrice,
           currency: plan.currency,
           durationInMonths: finalDurationMonths,
+          durationInDays: finalDurationDays,
           startDate,
           endDate,
           isActive: true,

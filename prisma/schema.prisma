@@ -165,6 +165,7 @@ model UserMembershipPlans {
   price            Decimal? @db.Decimal(10, 2)
   currency         String   @default("INR")
   durationInMonths Int
+  durationInDays   Int      @default(0)
 
   startDate DateTime
   endDate   DateTime
@@ -190,6 +191,7 @@ model MembershipPlan {
   currency        String   @default("INR")
 
   durationInMonths Int
+  durationInDays   Int      @default(0)
 
   features String[]
 
